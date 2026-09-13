@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: online-assessment-round1
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RETENTION_HOURS
+        value: "24"
+      - key: JWT_SECRET
+        generateValue: true
