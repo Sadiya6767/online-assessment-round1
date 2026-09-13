@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api` : '/api';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   timeout: 15000,
 });
 
@@ -51,7 +53,7 @@ export const adminAPI = {
   getStats: () => api.get('/admin/stats'),
   getCandidates: (params) => api.get('/admin/candidates', { params }),
   getCandidateDetails: (id) => api.get(`/admin/candidate/${id}`),
-  getResumeUrl: (filename) => `/api/admin/resume/${encodeURIComponent(filename)}`,
+  getResumeUrl: (filename) => `${API_BASE_URL}/admin/resume/${encodeURIComponent(filename)}`,
   exportCSV: () => api.get('/admin/export-csv', { responseType: 'blob' }),
   deleteCandidate: (id) => api.delete(`/admin/candidate/${id}`),
   purgeExpired: () => api.post('/admin/purge-expired'),
