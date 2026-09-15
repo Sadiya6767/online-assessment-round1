@@ -22,7 +22,8 @@ import {
   Percent,
   BarChart3,
   Timer,
-  Sparkles
+  Sparkles,
+  Briefcase
 } from 'lucide-react';
 import { adminAPI } from '../services/api';
 import ThemeToggle from '../components/ThemeToggle';
@@ -45,6 +46,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [profileFilter, setProfileFilter] = useState('ALL');
   const [gradYearFilter, setGradYearFilter] = useState('ALL');
   const [percentageRange, setPercentageRange] = useState('ALL');
 
@@ -72,6 +74,7 @@ export default function AdminDashboard() {
         adminAPI.getCandidates({
           search: search.trim(),
           status: statusFilter,
+          profile: profileFilter,
           gradYear: gradYearFilter,
           percentageRange: percentageRange
         })
@@ -93,7 +96,7 @@ export default function AdminDashboard() {
       return;
     }
     fetchDashboardData();
-  }, [statusFilter, gradYearFilter, percentageRange]);
+  }, [statusFilter, profileFilter, gradYearFilter, percentageRange]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -106,6 +109,7 @@ export default function AdminDashboard() {
       adminAPI.getCandidates({
         search: '',
         status: statusFilter,
+        profile: profileFilter,
         gradYear: gradYearFilter,
         percentageRange: percentageRange
       }).then(res => setCandidates(res.data.candidates || []));
@@ -383,6 +387,21 @@ export default function AdminDashboard() {
                 </select>
               </div>
 
+              {/* Profile Filter */}
+              <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-[#1B2B23] px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-[#284033] text-xs">
+                <Briefcase className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                <select
+                  value={profileFilter}
+                  onChange={(e) => setProfileFilter(e.target.value)}
+                  className="bg-transparent text-gray-700 dark:text-gray-200 font-medium border-0 focus:ring-0 cursor-pointer"
+                >
+                  <option value="ALL" className="dark:bg-[#14221B]">All Profiles</option>
+                  <option value="Web Development cum Sales Engineer" className="dark:bg-[#14221B]">Sales Engineer</option>
+                  <option value="Web Development cum HR Recruiter" className="dark:bg-[#14221B]">HR Recruiter</option>
+                  <option value="Web Development cum Digital Marketing" className="dark:bg-[#14221B]">Digital Marketing</option>
+                </select>
+              </div>
+
               {/* Grad Year Filter */}
               <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-[#1B2B23] px-2.5 py-1.5 rounded-xl border border-gray-200 dark:border-[#284033] text-xs">
                 <GraduationCap className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
@@ -498,7 +517,13 @@ export default function AdminDashboard() {
                       {/* Name & Contact */}
                       <td className="py-3 px-4">
                         <div className="font-semibold text-gray-900 dark:text-gray-100">{cand.fullName}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{cand.email}</div>
+                        {cand.interestedProfile && (
+                          <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 dark:bg-[#1D3327] text-[#146C43] dark:text-emerald-300 border border-[#C8E8D5] dark:border-[#294337]">
+                            <Briefcase className="w-2.5 h-2.5 flex-shrink-0" />
+                            <span className="truncate max-w-[200px]">{cand.interestedProfile}</span>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{cand.email}</div>
                         <div className="text-[11px] text-gray-400 dark:text-gray-500 font-mono">+91 {cand.phone}</div>
                       </td>
 
@@ -639,10 +664,16 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <>
-                  <div className="bg-gray-50 dark:bg-[#1B2B23] rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="bg-gray-50 dark:bg-[#1B2B23] rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                     <div>
                       <div className="text-gray-400">Full Name</div>
                       <div className="font-bold text-gray-800 dark:text-gray-100 text-sm">{candidateAudit?.candidate?.full_name}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Target Profile</div>
+                      <div className="font-bold text-[#146C43] dark:text-emerald-400 text-xs truncate" title={candidateAudit?.candidate?.interestedProfile}>
+                        {candidateAudit?.candidate?.interestedProfile || 'Web Development cum Sales Engineer'}
+                      </div>
                     </div>
                     <div>
                       <div className="text-gray-400">Email</div>

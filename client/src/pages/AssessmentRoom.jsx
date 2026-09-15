@@ -14,6 +14,7 @@ export default function AssessmentRoom() {
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState(1);
   const [totalQuestions, setTotalQuestions] = useState(50);
   const [question, setQuestion] = useState(null);
+  const [interestedProfile, setInterestedProfile] = useState(localStorage.getItem('nexis_interested_profile') || '');
 
   // Per-Question Timer Configuration
   // Active window: 28 seconds; Force auto-advances at 30 seconds
@@ -40,6 +41,10 @@ export default function AssessmentRoom() {
       }
 
       setCandidateName(res.data.candidateName || 'Candidate');
+      if (res.data.interestedProfile) {
+        setInterestedProfile(res.data.interestedProfile);
+        localStorage.setItem('nexis_interested_profile', res.data.interestedProfile);
+      }
       setCurrentQuestionNumber(res.data.currentQuestionNumber);
       setTotalQuestions(res.data.totalQuestions);
       setQuestion(res.data.question);
@@ -193,8 +198,13 @@ export default function AssessmentRoom() {
                 Round 1 – Online Assessment
               </h1>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-              Candidate: <span className="font-semibold text-gray-700 dark:text-gray-200">{candidateName}</span>
+            <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:flex items-center gap-1.5 mt-0.5">
+              <span>Candidate: <strong className="text-gray-700 dark:text-gray-200">{candidateName}</strong></span>
+              {interestedProfile && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EAF7EF] dark:bg-[#1D3327] text-[#146C43] dark:text-emerald-300 border border-[#C8E8D5] dark:border-[#294337]">
+                  {interestedProfile}
+                </span>
+              )}
             </p>
           </div>
 
@@ -350,7 +360,7 @@ export default function AssessmentRoom() {
 
       {/* Footer */}
       <footer className="py-3 px-4 text-center text-xs text-gray-400 dark:text-gray-600 border-t border-gray-200/50 dark:border-gray-800 bg-white dark:bg-[#14221B]">
-        Round 1 Assessment • 28s Per Question • Questions randomized per candidate
+        Round 1 Assessment • 28s Per Question • {interestedProfile ? `${interestedProfile} Track` : 'Questions randomized per candidate'}
       </footer>
 
     </div>

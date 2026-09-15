@@ -15,16 +15,45 @@ import {
   BookOpen,
   ArrowRight,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  TrendingUp,
+  Users,
+  Target,
+  Briefcase
 } from 'lucide-react';
 import { candidateAPI } from '../services/api';
 import ThemeToggle from '../components/ThemeToggle';
+
+const PROFILES = [
+  {
+    id: 'Web Development cum Sales Engineer',
+    title: 'Web Development cum Sales Engineer',
+    badge: 'Tech Sales & Client Solutions',
+    icon: TrendingUp,
+    description: 'Core Web Dev (HTML, CSS, JS) + Reasoning + Pre-Sales, SaaS Proposals, Tech Discovery & Client Solutions.'
+  },
+  {
+    id: 'Web Development cum HR Recruiter',
+    title: 'Web Development cum HR Recruiter',
+    badge: 'Talent Acquisition & Technical HR',
+    icon: Users,
+    description: 'Core Web Dev (HTML, CSS, JS) + Reasoning + Tech Sourcing, Candidate Screening, Structured Interviews & HR Ethics.'
+  },
+  {
+    id: 'Web Development cum Digital Marketing',
+    title: 'Web Development cum Digital Marketing',
+    badge: 'SEO, Performance Ads & Growth',
+    icon: Target,
+    description: 'Core Web Dev (HTML, CSS, JS) + Reasoning + Technical SEO, Google Analytics 4, Meta/PPC Ads & Conversion Optimization.'
+  }
+];
 
 export default function CandidateRegistration() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     fullName: '',
+    interestedProfile: 'Web Development cum Sales Engineer',
     degree: '',
     customDegree: '',
     semester: '',
@@ -51,6 +80,8 @@ export default function CandidateRegistration() {
     switch (name) {
       case 'fullName':
         return !value || value.trim().length < 2 ? 'Please enter your complete full name' : '';
+      case 'interestedProfile':
+        return !value ? 'Please select your target job profile' : '';
       case 'degree':
         return !value ? 'Please select your degree' : '';
       case 'semester':
@@ -148,6 +179,7 @@ export default function CandidateRegistration() {
     try {
       const payload = new FormData();
       payload.append('fullName', formData.fullName.trim());
+      payload.append('interestedProfile', formData.interestedProfile);
       payload.append('degree', formData.degree === 'Other' ? formData.customDegree.trim() : formData.degree);
       payload.append('semester', formData.semester);
       payload.append('year', formData.year);
@@ -165,6 +197,7 @@ export default function CandidateRegistration() {
         localStorage.setItem('nexis_assessment_id', res.data.assessmentId);
         localStorage.setItem('nexis_candidate_id', res.data.candidateId);
         localStorage.setItem('nexis_candidate_name', res.data.candidateName || formData.fullName);
+        localStorage.setItem('nexis_interested_profile', res.data.interestedProfile || formData.interestedProfile);
 
         navigate(`/test/${res.data.assessmentId}`);
       }
@@ -199,8 +232,8 @@ export default function CandidateRegistration() {
           Round 1 – <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#198754] via-[#20A065] to-[#146C43] dark:from-emerald-400 dark:to-emerald-300">Online Assessment</span>
         </h1>
         <p className="mt-2.5 text-sm sm:text-base text-gray-600 dark:text-gray-300 max-w-2xl mx-auto font-normal">
-          Common first-round evaluation for technical and workplace competencies.
-          Complete your registration below to launch your assessment.
+          Common first-round evaluation for technical and specialized job roles.
+          Select your interested profile and complete your registration below to launch your assessment.
         </p>
 
         {/* Quick Highlights Bar */}
@@ -216,9 +249,9 @@ export default function CandidateRegistration() {
             <div className="text-sm font-bold text-gray-900 dark:text-gray-100">28s / Question</div>
           </div>
           <div className="bg-white/80 dark:bg-[#14221B]/80 backdrop-blur-xs border border-gray-200/80 dark:border-[#284033] rounded-2xl p-3 text-center shadow-card hover:border-[#198754]/40 transition-all">
-            <BookOpen className="w-5 h-5 mx-auto text-[#198754] dark:text-emerald-400 mb-1" />
-            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Assessment</div>
-            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">Common Test</div>
+            <Briefcase className="w-5 h-5 mx-auto text-[#198754] dark:text-emerald-400 mb-1" />
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Profiles</div>
+            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">3 Specializations</div>
           </div>
           <div className="bg-white/80 dark:bg-[#14221B]/80 backdrop-blur-xs border border-gray-200/80 dark:border-[#284033] rounded-2xl p-3 text-center shadow-card hover:border-[#198754]/40 transition-all">
             <ArrowRight className="w-5 h-5 mx-auto text-[#198754] dark:text-emerald-400 mb-1" />
@@ -244,11 +277,11 @@ export default function CandidateRegistration() {
           <ul className="mt-4 space-y-2.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
-              <span>This assessment contains <strong>50 questions</strong>. Each question has a <strong>28-second timer</strong> and automatically advances at <strong>30 seconds</strong>.</span>
+              <span>This assessment contains <strong>50 questions</strong> (Web Development + Reasoning common modules, plus questions tailored to your chosen specialization). Each question has a <strong>28-second timer</strong> and automatically advances at <strong>30 seconds</strong>.</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
-              <span>The test is <strong>common for all candidates</strong> applying for technical and cross-functional positions.</span>
+              <span>Select your interested profile carefully. <strong>You will only receive questions relevant to your selected profile</strong>.</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
@@ -285,14 +318,90 @@ export default function CandidateRegistration() {
           <div className="border-b border-gray-100 dark:border-gray-800/80 pb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">Candidate Registration</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Please provide your verified details</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Please select your profile and provide your verified details</p>
             </div>
             <span className="text-[11px] text-[#198754] dark:text-emerald-400 font-semibold bg-[#EAF7EF] dark:bg-[#1D3327] px-2.5 py-1 rounded-full">
               All Fields Required
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {/* Specialization Profile Selection */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                Interested Job Profile / Specialization <span className="text-rose-500">*</span>
+              </label>
+              <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                Choose 1 profile
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Web Development & Reasoning questions are common across all roles. Specialization questions (10 MCQs) will be strictly based on your chosen profile.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              {PROFILES.map((prof) => {
+                const isSelected = formData.interestedProfile === prof.id;
+                const IconComp = prof.icon;
+                return (
+                  <button
+                    key={prof.id}
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, interestedProfile: prof.id }));
+                      if (errors.interestedProfile) {
+                        setErrors(prev => ({ ...prev, interestedProfile: '' }));
+                      }
+                    }}
+                    className={`relative text-left p-4 rounded-xl border transition-all duration-200 flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-[#198754] ring-2 ring-[#198754]/25 shadow-xs'
+                        : 'bg-gray-50/50 dark:bg-[#1B2B23]/70 border-gray-200/80 dark:border-[#284033] hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <span className={`p-2 rounded-lg ${
+                          isSelected
+                            ? 'bg-[#198754] text-white'
+                            : 'bg-gray-200/70 dark:bg-[#284033] text-gray-600 dark:text-gray-300'
+                        }`}>
+                          <IconComp className="w-4 h-4" />
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          isSelected
+                            ? 'bg-[#198754]/15 text-[#198754] dark:text-emerald-400'
+                            : 'bg-gray-200/60 dark:bg-[#20362B] text-gray-500 dark:text-gray-400'
+                        }`}>
+                          {prof.badge}
+                        </span>
+                      </div>
+                      <div className="font-bold text-xs sm:text-sm text-gray-900 dark:text-gray-100">
+                        {prof.title}
+                      </div>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                        {prof.description}
+                      </p>
+                    </div>
+                    <div className="mt-3.5 pt-2.5 border-t border-gray-200/60 dark:border-[#284033] flex items-center justify-between text-[11px]">
+                      <span className={isSelected ? 'text-[#198754] dark:text-emerald-400 font-semibold' : 'text-gray-400'}>
+                        {isSelected ? '✓ Selected Profile' : 'Click to select'}
+                      </span>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        isSelected ? 'border-[#198754] bg-[#198754]' : 'border-gray-300 dark:border-gray-600'
+                      }`}>
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {errors.interestedProfile && (
+              <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.interestedProfile}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-gray-100 dark:border-gray-800/80">
             {/* Full Name */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
@@ -329,72 +438,63 @@ export default function CandidateRegistration() {
                   name="degree"
                   value={formData.degree}
                   onChange={handleChange}
-                  className={`w-full pl-10 pr-8 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
+                  className={`w-full pl-10 pr-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
                     errors.degree ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
                   }`}
                 >
-                  <option value="">Select Degree</option>
+                  <option value="" disabled>Select degree</option>
                   {degrees.map((d) => (
                     <option key={d} value={d} className="dark:bg-[#14221B]">{d}</option>
                   ))}
                 </select>
               </div>
-              {formData.degree === 'Other' && (
+              {errors.degree && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.degree}</p>}
+            </div>
+
+            {/* Custom Degree if Other */}
+            {formData.degree === 'Other' && (
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                  Specify Degree <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   name="customDegree"
                   value={formData.customDegree}
                   onChange={handleChange}
-                  placeholder="Specify your degree"
-                  className="mt-2 w-full px-3.5 py-2 bg-gray-50 dark:bg-[#1B2B23] border border-gray-200 dark:border-[#284033] rounded-xl text-sm focus:border-[#198754] text-gray-900 dark:text-gray-100"
+                  placeholder="e.g. B.Com, BA, B.Sc"
+                  className="w-full px-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border border-gray-200 dark:border-[#284033] rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:bg-white dark:focus:bg-[#1B2B23] focus:border-[#198754] focus:ring-2 focus:ring-[#198754]/20"
                 />
-              )}
-              {errors.degree && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.degree}</p>}
-            </div>
+              </div>
+            )}
 
-            {/* Branch */}
+            {/* Branch / Specialization */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
                 Branch / Specialization <span className="text-rose-500">*</span>
               </label>
-              <input
-                type="text"
-                name="branch"
-                value={formData.branch}
-                onChange={handleChange}
-                placeholder="Enter branch or specialization"
-                className={`w-full px-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
-                  errors.branch ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
-                }`}
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  name="branch"
+                  value={formData.branch}
+                  onChange={handleChange}
+                  placeholder="e.g. Computer Science, IT, Mechanical"
+                  className={`w-full pl-10 pr-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
+                    errors.branch ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
+                  }`}
+                />
+              </div>
               {errors.branch && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.branch}</p>}
-            </div>
-
-            {/* Semester */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
-                Current Semester <span className="text-rose-500">*</span>
-              </label>
-              <select
-                name="semester"
-                value={formData.semester}
-                onChange={handleChange}
-                className={`w-full px-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
-                  errors.semester ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
-                }`}
-              >
-                <option value="">Select Semester</option>
-                {semesters.map((s) => (
-                  <option key={s} value={s} className="dark:bg-[#14221B]">{s}</option>
-                ))}
-              </select>
-              {errors.semester && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.semester}</p>}
             </div>
 
             {/* Academic Year */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
-                Academic Year <span className="text-rose-500">*</span>
+                Current Year <span className="text-rose-500">*</span>
               </label>
               <select
                 name="year"
@@ -404,7 +504,7 @@ export default function CandidateRegistration() {
                   errors.year ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
                 }`}
               >
-                <option value="">Select Year</option>
+                <option value="" disabled>Select year</option>
                 {years.map((y) => (
                   <option key={y} value={y} className="dark:bg-[#14221B]">{y}</option>
                 ))}
@@ -412,8 +512,29 @@ export default function CandidateRegistration() {
               {errors.year && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.year}</p>}
             </div>
 
+            {/* Semester */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+                Semester <span className="text-rose-500">*</span>
+              </label>
+              <select
+                name="semester"
+                value={formData.semester}
+                onChange={handleChange}
+                className={`w-full px-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
+                  errors.semester ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
+                }`}
+              >
+                <option value="" disabled>Select semester</option>
+                {semesters.map((s) => (
+                  <option key={s} value={s} className="dark:bg-[#14221B]">{s}</option>
+                ))}
+              </select>
+              {errors.semester && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.semester}</p>}
+            </div>
+
             {/* College Name */}
-            <div className="sm:col-span-2">
+            <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
                 College / University Name <span className="text-rose-500">*</span>
               </label>
@@ -426,7 +547,7 @@ export default function CandidateRegistration() {
                   name="collegeName"
                   value={formData.collegeName}
                   onChange={handleChange}
-                  placeholder="Enter college or university name"
+                  placeholder="Enter full college name"
                   className={`w-full pl-10 pr-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
                     errors.collegeName ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
                   }`}
@@ -438,7 +559,7 @@ export default function CandidateRegistration() {
             {/* Graduation Year */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
-                Graduation Year <span className="text-rose-500">*</span>
+                Graduation Year (Batch) <span className="text-rose-500">*</span>
               </label>
               <select
                 name="graduationYear"
@@ -448,9 +569,9 @@ export default function CandidateRegistration() {
                   errors.graduationYear ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
                 }`}
               >
-                <option value="">Select Graduation Year</option>
-                {gradYears.map((gy) => (
-                  <option key={gy} value={gy} className="dark:bg-[#14221B]">{gy}</option>
+                <option value="" disabled>Select graduation year</option>
+                {gradYears.map((y) => (
+                  <option key={y} value={y} className="dark:bg-[#14221B]">{y}</option>
                 ))}
               </select>
               {errors.graduationYear && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.graduationYear}</p>}
@@ -480,77 +601,82 @@ export default function CandidateRegistration() {
             </div>
 
             {/* Phone Number */}
-            <div className="sm:col-span-2">
+            <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
-                Mobile Number (10-Digit) <span className="text-rose-500">*</span>
+                Mobile Number <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500 dark:text-gray-400 text-xs font-semibold">
-                  +91
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                  <Phone className="w-4 h-4" />
                 </div>
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  maxLength="10"
-                  placeholder="Enter 10-digit mobile number"
-                  className={`w-full pl-12 pr-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
+                  placeholder="10-digit mobile number"
+                  maxLength={10}
+                  className={`w-full pl-10 pr-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
                     errors.phone ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
                   }`}
                 />
               </div>
               {errors.phone && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.phone}</p>}
             </div>
-
-            {/* Resume Upload Box */}
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
-                Upload Resume (PDF, DOC, DOCX - Max 5MB) <span className="text-rose-500">*</span>
-              </label>
-              <div className={`mt-1 border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
-                errors.resume
-                  ? 'border-rose-300 bg-rose-50/40 dark:bg-rose-950/20 dark:border-rose-800'
-                  : resumeFile
-                  ? 'border-[#198754] bg-[#EAF7EF]/50 dark:bg-[#1B2B23]/70'
-                  : 'border-gray-300 dark:border-[#284033] hover:border-[#198754]/70 bg-gray-50/40 dark:bg-[#1B2B23]/30'
-              }`}>
-                <input
-                  type="file"
-                  id="resumeUpload"
-                  onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx"
-                  className="hidden"
-                />
-                <label htmlFor="resumeUpload" className="cursor-pointer flex flex-col items-center justify-center">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-2.5 transition-transform ${
-                    resumeFile ? 'bg-[#198754] text-white scale-105 shadow-sm' : 'bg-gray-100 dark:bg-[#1F362A] text-gray-500 dark:text-gray-400'
-                  }`}>
-                    {resumeFile ? <CheckCircle2 className="w-6 h-6" /> : <Upload className="w-6 h-6" />}
-                  </div>
-                  {resumeFile ? (
-                    <div>
-                      <p className="text-sm font-bold text-[#146C43] dark:text-emerald-400">{resumeFile.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {(resumeFile.size / (1024 * 1024)).toFixed(2)} MB • Click to replace document
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                        Click to upload or drag and drop your resume
-                      </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Accepts PDF, DOC, or DOCX formats up to 5MB</p>
-                    </div>
-                  )}
-                </label>
-              </div>
-              {errors.resume && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{errors.resume}</p>}
-            </div>
           </div>
 
-          {/* Consent Declaration */}
-          <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
+          {/* Resume Upload Box */}
+          <div className="pt-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
+              Upload Resume (PDF, DOC, DOCX - Max 5MB) <span className="text-rose-500">*</span>
+            </label>
+            <div
+              className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
+                errors.resume
+                  ? 'border-rose-400 bg-rose-50/40 dark:bg-rose-950/20'
+                  : resumeFile
+                  ? 'border-[#198754] bg-[#EAF7EF]/40 dark:bg-[#1D3327]/30'
+                  : 'border-gray-300 dark:border-[#284033] bg-gray-50/50 dark:bg-[#1B2B23]/40 hover:border-[#198754]/60'
+              }`}
+            >
+              <input
+                type="file"
+                id="resumeUpload"
+                onChange={handleFileChange}
+                accept=".pdf,.doc,.docx"
+                className="hidden"
+              />
+              <label htmlFor="resumeUpload" className="cursor-pointer block">
+                {resumeFile ? (
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 rounded-full bg-[#EAF7EF] dark:bg-[#1D3327] text-[#198754] dark:text-emerald-400 flex items-center justify-center mb-2">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{resumeFile.name}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {(resumeFile.size / (1024 * 1024)).toFixed(2)} MB • Click to replace file
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#1B2B23] text-gray-500 dark:text-gray-400 flex items-center justify-center mb-2">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Click to upload your resume
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      Supported formats: PDF, DOC, DOCX (up to 5MB)
+                    </span>
+                  </div>
+                )}
+              </label>
+            </div>
+            {errors.resume && <p className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{errors.resume}</p>}
+          </div>
+
+          {/* Consent Declaration Checkbox */}
+          <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -560,7 +686,7 @@ export default function CandidateRegistration() {
                 className="mt-1 h-4 w-4 text-[#198754] rounded border-gray-300 dark:border-gray-700 focus:ring-[#198754]"
               />
               <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-snug select-none">
-                I confirm that the information provided above is correct, and I agree to participate in the online assessment.
+                I confirm that the information provided above is correct, and I agree to participate in the online assessment for my selected profile.
               </span>
             </label>
             {errors.consent && <p className="mt-1 text-xs text-rose-600 dark:text-rose-400 pl-7">{errors.consent}</p>}
@@ -592,7 +718,6 @@ export default function CandidateRegistration() {
             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2.5">
               The assessment starts immediately once you click Start Assessment.
             </p>
-
           </div>
         </form>
       </main>

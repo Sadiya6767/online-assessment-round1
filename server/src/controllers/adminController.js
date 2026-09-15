@@ -87,12 +87,13 @@ export function triggerRetentionPurge(req, res) {
 
 export function getCandidates(req, res) {
   try {
-    const { search, status, gradYear, percentageRange } = req.query;
+    const { search, status, gradYear, percentageRange, profile } = req.query;
 
     let query = `
       SELECT 
         c.id as candidateId,
         c.full_name as fullName,
+        c.interested_profile as interestedProfile,
         c.degree,
         c.semester,
         c.year,
@@ -128,6 +129,11 @@ export function getCandidates(req, res) {
       params.push(status);
     }
 
+    if (profile && profile !== 'ALL') {
+      query += ` AND c.interested_profile = ?`;
+      params.push(profile);
+    }
+
     if (gradYear && gradYear !== 'ALL') {
       query += ` AND c.graduation_year = ?`;
       params.push(gradYear);
@@ -150,32 +156,16 @@ export function getCandidates(req, res) {
 
     query += ` ORDER BY c.created_at DESC`;
 
-    const rows = db.prepare(query).all(...params);
+    const candidates = db.prepare(query).all(...params);
 
-    // Format fields with duration and percentage
-    const candidates = rows.map(c => {
-      let durationUsed = '-';
-      if (c.startTime && c.submissionTime) {
-        const start = new Date(c.startTime).getTime();
-        const end = new Date(c.submissionTime).getTime();
-        const diffSec = Math.max(0, Math.floor((end - start) / 1000));
-        const mins = Math.floor(diffSec / 60);
-        const secs = diffSec % 60;
-        durationUsed = `${mins}m ${secs.toString().padStart(2, '0')}s`;
-      }
-
-      const percentage = c.totalQuestions ? Math.round((c.score / c.totalQuestions) * 100) : 0;
-
-      return {
+    return res.json({
+      candidates: candidates.map(c => ({
         ...c,
-        durationUsed,
-        percentage
-      };
+        percentage: c.totalQuestions && c.score !== null ? Math.round((c.score / c.totalQuestions) * 100) : null
+      }))
     });
-
-    return res.json({ candidates });
   } catch (error) {
-    console.error('Error fetching candidate records:', error);
+    console.error('Error fetching candidates:', error);
     return res.status(500).json({ error: 'Failed to retrieve candidates.' });
   }
 }
@@ -186,15 +176,27 @@ export function getCandidateDetails(req, res) {
 
     const candidate = db.prepare(`
       SELECT 
-        c.*,
+        c.id as candidateId,
+        c.full_name as fullName,
+        c.interested_profile as interestedProfile,
+        c.degree,
+        c.semester,
+        c.year,
+        c.branch,
+        c.college_name as collegeName,
+        c.graduation_year as graduationYear,
+        c.email,
+        c.phone,
+        c.resume_file_path as resumeFilePath,
+        c.created_at as registeredAt,
         a.id as assessmentId,
         a.status as testStatus,
         a.score,
         a.total_questions as totalQuestions,
         a.start_time as startTime,
+        a.deadline,
         a.submission_time as submissionTime,
-        a.completion_reason as completionReason,
-        a.question_sequence as questionSequence
+        a.completion_reason as completionReason
       FROM candidates c
       LEFT JOIN assessments a ON c.id = a.candidate_id
       WHERE c.id = ? OR a.id = ?
@@ -272,6 +274,7 @@ export function exportCSV(req, res) {
       SELECT 
         c.id as Candidate_ID,
         c.full_name as Full_Name,
+        c.interested_profile as Interested_Profile,
         c.email as Email,
         c.phone as Phone,
         c.degree as Degree,

@@ -1,6 +1,12 @@
 import db from '../database.js';
 import crypto from 'crypto';
 
+export const VALID_PROFILES = {
+  'Web Development cum Sales Engineer': 'SALES_ENGINEER',
+  'Web Development cum HR Recruiter': 'HR_RECRUITER',
+  'Web Development cum Digital Marketing': 'DIGITAL_MARKETING'
+};
+
 // Cryptographically secure Fisher-Yates shuffle algorithm to ensure unique question sequences per candidate
 function shuffleArray(array) {
   const shuffled = [...array];
@@ -15,6 +21,7 @@ export function registerCandidate(req, res) {
   try {
     const {
       fullName,
+      interestedProfile,
       degree,
       semester,
       year,
@@ -33,6 +40,13 @@ export function registerCandidate(req, res) {
 
     if (!fullName || fullName.trim().length < 2) {
       errors.fullName = 'Please enter your complete legal name.';
+    }
+
+    let chosenProfile = 'Web Development cum Sales Engineer';
+    if (interestedProfile && VALID_PROFILES[interestedProfile.trim()]) {
+      chosenProfile = interestedProfile.trim();
+    } else if (interestedProfile && !VALID_PROFILES[interestedProfile.trim()]) {
+      errors.interestedProfile = 'Please select a valid career profile from the available options.';
     }
 
     if (!degree || degree.trim().length === 0) {
@@ -86,7 +100,7 @@ export function registerCandidate(req, res) {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Check if candidate already registered with completed or in-progress test
-    const existingCandidate = db.prepare('SELECT id FROM candidates WHERE email = ?').get(normalizedEmail);
+    const existingCandidate = db.prepare('SELECT id, interested_profile FROM candidates WHERE email = ?').get(normalizedEmail);
     if (existingCandidate) {
       const existingAssessment = db.prepare('SELECT id, status FROM assessments WHERE candidate_id = ?').get(existingCandidate.id);
       if (existingAssessment) {
@@ -100,6 +114,7 @@ export function registerCandidate(req, res) {
             message: 'Resuming active assessment session.',
             candidateId: existingCandidate.id,
             assessmentId: existingAssessment.id,
+            interestedProfile: existingCandidate.interested_profile,
             isResuming: true
           });
         }
@@ -111,20 +126,27 @@ export function registerCandidate(req, res) {
     const candidateId = `CAN-${Date.now().toString(36).toUpperCase()}-${randomHex}`;
     const assessmentId = `ASM-${Date.now().toString(36).toUpperCase()}-${randomHex}`;
 
-    // Generate Randomized Question Sequence for this candidate (Anti-cheating requirement)
-    const allQuestions = db.prepare('SELECT id FROM questions ORDER BY id ASC').all();
-    const questionIds = allQuestions.map(q => q.id);
+    // Select questions: 40 Common (Web Dev + Aptitude) + 10 Profile Specific
+    const targetProfileCode = VALID_PROFILES[chosenProfile];
+    const eligibleQuestions = db.prepare(`
+      SELECT id FROM questions 
+      WHERE target_profile = 'COMMON' OR target_profile = ? 
+      ORDER BY id ASC
+    `).all(targetProfileCode);
+
+    const questionIds = eligibleQuestions.map(q => q.id);
     const randomizedSequence = shuffleArray(questionIds);
 
     // Insert Candidate
     db.prepare(`
       INSERT INTO candidates (
-        id, full_name, degree, semester, year, branch, college_name,
+        id, full_name, interested_profile, degree, semester, year, branch, college_name,
         graduation_year, email, phone, resume_file_path, consent_given
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       candidateId,
       fullName.trim(),
+      chosenProfile,
       degree.trim(),
       semester.trim(),
       year.trim(),
@@ -137,7 +159,7 @@ export function registerCandidate(req, res) {
       1
     );
 
-    // Insert Assessment Record with randomized sequence
+    // Insert Assessment Record with profile name and randomized sequence
     db.prepare(`
       INSERT INTO assessments (
         id, candidate_id, assessment_name, status, question_sequence, total_questions
@@ -145,7 +167,7 @@ export function registerCandidate(req, res) {
     `).run(
       assessmentId,
       candidateId,
-      'Round 1 – Common Assessment',
+      `Round 1 – ${chosenProfile}`,
       'NOT_STARTED',
       JSON.stringify(randomizedSequence),
       randomizedSequence.length
@@ -155,7 +177,8 @@ export function registerCandidate(req, res) {
       message: 'Registration successful',
       candidateId,
       assessmentId,
-      candidateName: fullName.trim()
+      candidateName: fullName.trim(),
+      interestedProfile: chosenProfile
     });
   } catch (error) {
     console.error('Registration error:', error);

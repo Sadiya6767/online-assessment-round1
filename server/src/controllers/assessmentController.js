@@ -64,7 +64,7 @@ export function getCurrentQuestion(req, res) {
     const { assessmentId } = req.params;
 
     const assessment = db.prepare(`
-      SELECT a.*, c.full_name, c.email, c.college_name
+      SELECT a.*, c.full_name, c.email, c.college_name, c.interested_profile
       FROM assessments a
       JOIN candidates c ON a.candidate_id = c.id
       WHERE a.id = ?
@@ -180,6 +180,7 @@ export function getCurrentQuestion(req, res) {
       totalQuestions: assessment.total_questions,
       remainingSeconds: remainingSeconds,
       candidateName: assessment.full_name,
+      interestedProfile: assessment.interested_profile,
       question: {
         id: question.id,
         section: question.section,
