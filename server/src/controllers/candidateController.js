@@ -1,11 +1,11 @@
 import db from '../database.js';
 import crypto from 'crypto';
 
-// Fisher-Yates shuffle algorithm for robust question sequence randomization
+// Cryptographically secure Fisher-Yates shuffle algorithm to ensure unique question sequences per candidate
 function shuffleArray(array) {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = crypto.randomInt(0, i + 1);
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
@@ -148,7 +148,7 @@ export function registerCandidate(req, res) {
       'Round 1 – Common Assessment',
       'NOT_STARTED',
       JSON.stringify(randomizedSequence),
-      30
+      randomizedSequence.length
     );
 
     return res.status(201).json({

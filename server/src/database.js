@@ -51,7 +51,7 @@ export function initDatabase() {
       current_question_index INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'NOT_STARTED',
       question_sequence TEXT NOT NULL,
-      total_questions INTEGER NOT NULL DEFAULT 30,
+      total_questions INTEGER NOT NULL DEFAULT 40,
       score INTEGER DEFAULT 0,
       completion_reason TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -391,6 +391,98 @@ function seedQuestions() {
       'It increases meeting times unnecessarily',
       'It eliminates the need for testing code',
       'B'
+    ],
+
+    // Additional 10 Curated Freshers Questions
+    [
+      31, 'Section A: HTML', 'Forms & Security',
+      'Which input type is used to allow users to securely enter a secret password in an HTML form?',
+      'type="text"',
+      'type="password"',
+      'type="secret"',
+      'type="hidden"',
+      'B'
+    ],
+    [
+      32, 'Section A: HTML', 'Tables',
+      'Which HTML tag is used to define a single row within an HTML data table?',
+      '<td>',
+      '<th>',
+      '<tr>',
+      '<row>',
+      'C'
+    ],
+    [
+      33, 'Section B: CSS', 'Flexbox',
+      'Which CSS display property value turns an element into a flexible flex container?',
+      'display: flex',
+      'display: block',
+      'display: inline',
+      'display: grid-flex',
+      'A'
+    ],
+    [
+      34, 'Section B: CSS', 'User Interaction',
+      'Which CSS pseudo-class is applied when a user hovers their mouse cursor over an element?',
+      ':active',
+      ':focus',
+      ':hover',
+      ':visited',
+      'C'
+    ],
+    [
+      35, 'Section C: JavaScript', 'Arrays',
+      'Which built-in JavaScript method adds one or more elements to the very end of an array?',
+      'push()',
+      'pop()',
+      'shift()',
+      'unshift()',
+      'A'
+    ],
+    [
+      36, 'Section C: JavaScript', 'Equality Operators',
+      'Which comparison operator checks for both identical value and matching data type in JavaScript?',
+      '=',
+      '==',
+      '===',
+      '!=',
+      'C'
+    ],
+    [
+      37, 'Section D: Logical Reasoning & Aptitude', 'Letter Series',
+      'Find the next letter in the sequence: A, C, E, G, ? (+2 letter skip)',
+      'H',
+      'I',
+      'J',
+      'K',
+      'B'
+    ],
+    [
+      38, 'Section D: Logical Reasoning & Aptitude', 'Ratios',
+      'If a basket contains 12 apples and 8 oranges, what is the simplified ratio of apples to oranges?',
+      '3:2',
+      '2:3',
+      '4:3',
+      '3:4',
+      'A'
+    ],
+    [
+      39, 'Section E: Workplace Awareness & Communication', 'Professional Tone',
+      'When communicating with a client or customer over email, what tone should you consistently maintain?',
+      'Polite, professional, respectful, and clear',
+      'Rude, short, and aggressive',
+      'Casual slang with unnecessary emojis',
+      'Silent and unhelpful',
+      'A'
+    ],
+    [
+      40, 'Section E: Workplace Awareness & Communication', 'Data Confidentiality',
+      'If you have access to sensitive client passwords or private business data, what is the required practice?',
+      'Share it with friends on social media',
+      'Keep it strictly confidential and secure according to company policy',
+      'Write it on a shared public whiteboard',
+      'Email it to your personal email account',
+      'B'
     ]
   ];
 
@@ -401,8 +493,9 @@ function seedQuestions() {
   });
 
   insertMany(questions);
-  console.log('✅ Successfully seeded 30 simplified freshers questions.');
+  console.log(`✅ Successfully seeded ${questions.length} simplified freshers questions.`);
 }
+
 
 function seedAdmin() {
   const existing = db.prepare('SELECT id FROM admins WHERE email = ?').get('admin@nexis.internal');

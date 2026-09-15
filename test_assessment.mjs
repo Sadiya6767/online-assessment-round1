@@ -137,8 +137,7 @@ async function runTests() {
 
   // 8. Complete Assessment for Candidate 1
   console.log('\n8️⃣ Simulating completion of all remaining questions for Candidate 1...');
-  let currentNum = ansSubmitData.nextQuestionNumber;
-  while (currentNum <= 30) {
+  while (true) {
     const curQ = await (await fetch(`${BASE_URL}/assessment/${reg1Data.assessmentId}/current`)).json();
     if (curQ.completed) break;
     const ansRes = await (await fetch(`${BASE_URL}/assessment/${reg1Data.assessmentId}/answer`, {
@@ -150,9 +149,8 @@ async function runTests() {
       })
     })).json();
     if (ansRes.completed) break;
-    currentNum = ansRes.nextQuestionNumber;
   }
-  console.log('   ✅ All 30 questions completed.');
+  console.log('   ✅ All questions completed.');
 
   // 9. Verify Candidate Status (Score must be HIDDEN)
   console.log('\n9️⃣ Checking Candidate Completion Screen Data (Score Privacy Test)...');

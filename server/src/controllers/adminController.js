@@ -53,8 +53,8 @@ export function getDashboardStats(req, res) {
     const inProgress = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE status = 'IN_PROGRESS'").get().count;
     const timedOut = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE status = 'TIMED_OUT'").get().count;
     
-    // Internal qualifying criteria: >= 18 out of 30 (60%)
-    const qualified = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE score >= 18 AND status IN ('COMPLETED', 'TIMED_OUT')").get().count;
+    // Internal qualifying criteria: >= 60% of total questions
+    const qualified = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE (CAST(score AS FLOAT) / total_questions) >= 0.6 AND status IN ('COMPLETED', 'TIMED_OUT')").get().count;
 
     const avgScoreRow = db.prepare("SELECT AVG(score) as avgScore FROM assessments WHERE status IN ('COMPLETED', 'TIMED_OUT')").get();
     const averageScore = avgScoreRow && avgScoreRow.avgScore ? Math.round(avgScoreRow.avgScore * 10) / 10 : 0;
