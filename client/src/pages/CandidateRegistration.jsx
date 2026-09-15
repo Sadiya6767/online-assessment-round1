@@ -200,7 +200,7 @@ export default function CandidateRegistration() {
         </h1>
         <p className="mt-2.5 text-sm sm:text-base text-gray-600 dark:text-gray-300 max-w-2xl mx-auto font-normal">
           Common first-round evaluation for technical and workplace competencies.
-          Complete your registration below to launch your 25-minute test.
+          Complete your registration below to launch your assessment.
         </p>
 
         {/* Quick Highlights Bar */}
@@ -208,12 +208,12 @@ export default function CandidateRegistration() {
           <div className="bg-white/80 dark:bg-[#14221B]/80 backdrop-blur-xs border border-gray-200/80 dark:border-[#284033] rounded-2xl p-3 text-center shadow-card hover:border-[#198754]/40 transition-all">
             <HelpCircle className="w-5 h-5 mx-auto text-[#198754] dark:text-emerald-400 mb-1" />
             <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Questions</div>
-            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">30 MCQs</div>
+            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">50 MCQs</div>
           </div>
           <div className="bg-white/80 dark:bg-[#14221B]/80 backdrop-blur-xs border border-gray-200/80 dark:border-[#284033] rounded-2xl p-3 text-center shadow-card hover:border-[#198754]/40 transition-all">
             <Clock className="w-5 h-5 mx-auto text-[#198754] dark:text-emerald-400 mb-1" />
-            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Duration</div>
-            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">25 Minutes</div>
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Timer</div>
+            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">28s / Question</div>
           </div>
           <div className="bg-white/80 dark:bg-[#14221B]/80 backdrop-blur-xs border border-gray-200/80 dark:border-[#284033] rounded-2xl p-3 text-center shadow-card hover:border-[#198754]/40 transition-all">
             <BookOpen className="w-5 h-5 mx-auto text-[#198754] dark:text-emerald-400 mb-1" />
@@ -244,7 +244,7 @@ export default function CandidateRegistration() {
           <ul className="mt-4 space-y-2.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
-              <span>This assessment contains <strong>30 questions</strong> with an active countdown of <strong>25 minutes</strong>.</span>
+              <span>This assessment contains <strong>50 questions</strong>. Each question has a <strong>28-second timer</strong> and automatically advances at <strong>30 seconds</strong>.</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
@@ -590,8 +590,9 @@ export default function CandidateRegistration() {
               )}
             </button>
             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2.5">
-              The 25-minute timer starts immediately once you click Start Assessment.
+              The assessment starts immediately once you click Start Assessment.
             </p>
+
           </div>
         </form>
       </main>

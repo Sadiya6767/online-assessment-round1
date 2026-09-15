@@ -350,8 +350,9 @@ export default function AssessmentRoom() {
 
       {/* Footer */}
       <footer className="py-3 px-4 text-center text-xs text-gray-400 dark:text-gray-600 border-t border-gray-200/50 dark:border-gray-800 bg-white dark:bg-[#14221B]">
-        Round 1 Assessment • 25 Minutes Total Duration • Questions randomized per candidate
+        Round 1 Assessment • 28s Per Question • Questions randomized per candidate
       </footer>
+
     </div>
   );
 }
