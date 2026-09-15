@@ -12,16 +12,20 @@ export default function AssessmentRoom() {
   const [error, setError] = useState('');
   const [candidateName, setCandidateName] = useState('');
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState(1);
-  const [totalQuestions, setTotalQuestions] = useState(30);
+  const [totalQuestions, setTotalQuestions] = useState(50);
   const [question, setQuestion] = useState(null);
 
-  // Timer state - 25 minutes = 1500 seconds
-  const [remainingSeconds, setRemainingSeconds] = useState(1500);
+  // Per-Question Timer Configuration
+  // Active window: 28 seconds; Force auto-advances at 30 seconds
+  const QUESTION_TOTAL_DURATION = 30; // seconds
+  const [timerRatio, setTimerRatio] = useState(1.0); // 1.0 (full) down to 0.0 (empty)
   const [selectedOption, setSelectedOption] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoAdvanceAlert, setAutoAdvanceAlert] = useState(false);
 
-  const timerIntervalRef = useRef(null);
-  const serverDeadlineRef = useRef(null);
+  const questionIntervalRef = useRef(null);
+  const questionStartTimeRef = useRef(Date.now());
+  const isAutoAdvancingRef = useRef(false);
 
   const fetchCurrentState = async () => {
     try {
@@ -41,11 +45,6 @@ export default function AssessmentRoom() {
       setQuestion(res.data.question);
       setSelectedOption(null);
       setIsSubmitting(false);
-
-      if (res.data.remainingSeconds !== undefined) {
-        setRemainingSeconds(res.data.remainingSeconds);
-        serverDeadlineRef.current = Date.now() + res.data.remainingSeconds * 1000;
-      }
     } catch (err) {
       console.error('Failed to load assessment:', err);
       setError(err.response?.data?.error || 'Failed to connect to assessment server. Please check your connection.');
@@ -66,45 +65,71 @@ export default function AssessmentRoom() {
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (questionIntervalRef.current) clearInterval(questionIntervalRef.current);
     };
   }, [assessmentId]);
 
-  // Synchronized 25-minute live timer countdown
+  // Synchronized 28-30s Per-Question Timer
   useEffect(() => {
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (!question || loading) return;
 
-    timerIntervalRef.current = setInterval(() => {
-      if (!serverDeadlineRef.current) return;
+    questionStartTimeRef.current = Date.now();
+    isAutoAdvancingRef.current = false;
+    setTimerRatio(1.0);
+    setAutoAdvanceAlert(false);
 
-      const now = Date.now();
-      const diffSec = Math.max(0, Math.floor((serverDeadlineRef.current - now) / 1000));
-      setRemainingSeconds(diffSec);
+    if (questionIntervalRef.current) clearInterval(questionIntervalRef.current);
 
-      if (diffSec <= 0) {
-        clearInterval(timerIntervalRef.current);
-        handleTimeExpired();
+    questionIntervalRef.current = setInterval(() => {
+      const elapsedSec = (Date.now() - questionStartTimeRef.current) / 1000;
+      const ratio = Math.max(0, (QUESTION_TOTAL_DURATION - elapsedSec) / QUESTION_TOTAL_DURATION);
+      setTimerRatio(ratio);
+
+      // Warning when approaching the end (at 26-28s mark)
+      if (elapsedSec >= 26) {
+        setAutoAdvanceAlert(true);
       }
-    }, 1000);
 
-    return () => clearInterval(timerIntervalRef.current);
-  }, []);
+      // Hard auto-advance at 30 seconds
+      if (elapsedSec >= QUESTION_TOTAL_DURATION) {
+        clearInterval(questionIntervalRef.current);
+        if (!isAutoAdvancingRef.current) {
+          isAutoAdvancingRef.current = true;
+          triggerAutoAdvance();
+        }
+      }
+    }, 100);
 
-  const handleTimeExpired = async () => {
+    return () => {
+      if (questionIntervalRef.current) clearInterval(questionIntervalRef.current);
+    };
+  }, [question?.id, loading]);
+
+  // Automatically submit and advance when question 30s limit expires
+  const triggerAutoAdvance = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
+
     try {
-      await assessmentAPI.getCurrentQuestion(assessmentId);
-    } catch (e) {
-      console.warn('Time expired ping error:', e);
-    } finally {
-      navigate(`/test/${assessmentId}/completed`);
+      const fallbackChoice = selectedOption || 'TIMEOUT';
+      const res = await assessmentAPI.submitAnswer(assessmentId, question.id, fallbackChoice);
+
+      if (res.data.completed) {
+        navigate(`/test/${assessmentId}/completed`);
+      } else {
+        await fetchCurrentState();
+      }
+    } catch (err) {
+      console.warn('Auto-advance submission error:', err);
+      await fetchCurrentState();
     }
   };
 
-  // Immediate selection and auto-advance
+  // Immediate option selection by candidate
   const handleOptionSelect = async (optionLabel) => {
     if (isSubmitting || selectedOption !== null) return;
 
+    if (questionIntervalRef.current) clearInterval(questionIntervalRef.current);
     setSelectedOption(optionLabel);
     setIsSubmitting(true);
 
@@ -114,11 +139,11 @@ export default function AssessmentRoom() {
       if (res.data.completed) {
         setTimeout(() => {
           navigate(`/test/${assessmentId}/completed`);
-        }, 350);
+        }, 300);
       } else {
         setTimeout(async () => {
           await fetchCurrentState();
-        }, 350);
+        }, 300);
       }
     } catch (err) {
       console.error('Failed to submit answer:', err);
@@ -126,21 +151,6 @@ export default function AssessmentRoom() {
     }
   };
 
-  const formatTime = (totalSec) => {
-    const mins = Math.floor(totalSec / 60);
-    const secs = totalSec % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getTimerStyles = () => {
-    if (remainingSeconds <= 120) {
-      return 'bg-rose-50 dark:bg-rose-950/50 border-rose-400 text-rose-700 dark:text-rose-400 shadow-sm animate-pulse';
-    }
-    if (remainingSeconds <= 300) {
-      return 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 text-amber-800 dark:text-amber-400 shadow-sm';
-    }
-    return 'bg-[#EAF7EF] dark:bg-[#1D3327] border-[#C8E8D5] dark:border-[#294337] text-[#146C43] dark:text-emerald-300 shadow-xs';
-  };
 
   const progressPercentage = Math.round((currentQuestionNumber / totalQuestions) * 100);
 
@@ -189,10 +199,33 @@ export default function AssessmentRoom() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Live Synchronized 25-Minute Countdown Timer */}
-            <div className={`flex items-center gap-2 px-4 py-1.5 rounded-xl border text-sm font-bold tracking-wider transition-all ${getTimerStyles()}`}>
-              <Clock className="w-4 h-4" />
-              <span className="font-mono text-sm sm:text-base">{formatTime(remainingSeconds)}</span>
+            {/* Live Per-Question Timer (No seconds exposed to candidate) */}
+            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-gray-200 dark:border-[#284033] bg-white dark:bg-[#14221B] shadow-xs">
+              <div className="flex items-center gap-1.5 text-xs font-bold">
+                <Clock className={`w-3.5 h-3.5 transition-colors ${
+                  timerRatio > 0.35
+                    ? 'text-[#198754] dark:text-emerald-400'
+                    : timerRatio > 0.15
+                    ? 'text-amber-500'
+                    : 'text-rose-500 animate-spin'
+                }`} />
+                <span className="text-gray-600 dark:text-gray-300">
+                  {timerRatio <= 0.15 ? 'Moving soon...' : 'Timer'}
+                </span>
+              </div>
+              {/* Visual Countdown Fuel Track - NO SECONDS SHOWN */}
+              <div className="w-24 sm:w-36 h-2.5 bg-gray-100 dark:bg-[#1E3326] rounded-full overflow-hidden p-0.5 border border-gray-200/70 dark:border-[#294534]">
+                <div
+                  className={`h-full rounded-full transition-all duration-100 ease-linear ${
+                    timerRatio > 0.35
+                      ? 'bg-gradient-to-r from-emerald-500 to-[#198754]'
+                      : timerRatio > 0.15
+                      ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+                      : 'bg-gradient-to-r from-rose-500 to-red-600 animate-pulse'
+                  }`}
+                  style={{ width: `${Math.max(4, Math.round(timerRatio * 100))}%` }}
+                />
+              </div>
             </div>
 
             <ThemeToggle />
@@ -212,6 +245,20 @@ export default function AssessmentRoom() {
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 sm:py-8 flex flex-col justify-center">
         {/* Question Card */}
         <div className="bg-white dark:bg-[#14221B] rounded-3xl border border-gray-200/90 dark:border-[#284033] shadow-soft dark:shadow-dark-soft p-5 sm:p-8 sm:py-9 relative overflow-hidden">
+          {/* Live Question Countdown Track across card header */}
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gray-100 dark:bg-gray-800 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-100 ease-linear ${
+                timerRatio > 0.35
+                  ? 'bg-gradient-to-r from-[#198754] via-emerald-400 to-[#146C43]'
+                  : timerRatio > 0.15
+                  ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+                  : 'bg-gradient-to-r from-rose-500 to-red-600 animate-pulse'
+              }`}
+              style={{ width: `${Math.round(timerRatio * 100)}%` }}
+            />
+          </div>
+
           {/* Section & Question Progress Header */}
           <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-gray-100 dark:border-gray-800/80">
             <div className="inline-flex items-center gap-2 bg-[#EAF7EF] dark:bg-[#1D3327] text-[#146C43] dark:text-emerald-300 px-3.5 py-1 rounded-xl text-xs font-bold tracking-wide border border-[#C8E8D5] dark:border-[#294337]">
@@ -234,10 +281,18 @@ export default function AssessmentRoom() {
           </div>
 
           {/* Notice Banner */}
-          <div className="mb-6 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50/80 dark:bg-[#1B2B23]/60 px-3.5 py-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
-            <AlertTriangle className="w-4 h-4 text-[#198754] dark:text-emerald-400 flex-shrink-0" />
-            <span>Click any option to immediately record your choice and auto-advance. Modification is disabled.</span>
+          <div className="mb-6 flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50/80 dark:bg-[#1B2B23]/60 px-3.5 py-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-[#198754] dark:text-emerald-400 flex-shrink-0" />
+              <span>Select an option to advance immediately. If not selected, the test automatically moves to the next question.</span>
+            </div>
+            {autoAdvanceAlert && (
+              <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 animate-pulse flex-shrink-0">
+                Auto-advancing...
+              </span>
+            )}
           </div>
+
 
           {/* 4 Interactive Option Cards */}
           <div className="space-y-3">

@@ -27,8 +27,8 @@ export function startAssessment(req, res) {
     if (assessment.status === 'NOT_STARTED') {
       const now = new Date();
       const startTime = now.toISOString();
-      // Total duration is 25 minutes = 25 * 60 * 1000 ms
-      const deadline = new Date(now.getTime() + 25 * 60 * 1000).toISOString();
+      // Generous overall ceiling: 45 minutes to allow per-question timers across all 50 questions
+      const deadline = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
 
       db.prepare(`
         UPDATE assessments 
@@ -87,7 +87,7 @@ export function getCurrentQuestion(req, res) {
     if (assessment.status === 'NOT_STARTED') {
       const now = new Date();
       const startTime = now.toISOString();
-      const deadline = new Date(now.getTime() + 25 * 60 * 1000).toISOString();
+      const deadline = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
 
       db.prepare(`
         UPDATE assessments 
@@ -203,10 +203,12 @@ export function submitAnswer(req, res) {
   try {
     const { assessmentId } = req.params;
     const { questionId, selectedOption } = req.body;
+    const normalizedOption = (selectedOption || '').trim().toUpperCase();
 
-    if (!selectedOption || !['A', 'B', 'C', 'D'].includes(selectedOption.toUpperCase())) {
-      return res.status(400).json({ error: 'Invalid answer option. Must be A, B, C, or D.' });
+    if (!['A', 'B', 'C', 'D', 'TIMEOUT', 'SKIPPED'].includes(normalizedOption)) {
+      return res.status(400).json({ error: 'Invalid answer option.' });
     }
+
 
     const assessment = db.prepare(`
       SELECT * FROM assessments WHERE id = ?
@@ -282,7 +284,7 @@ export function submitAnswer(req, res) {
       return res.status(404).json({ error: 'Question not found.' });
     }
 
-    const isCorrect = (question.correct_option.trim().toUpperCase() === selectedOption.trim().toUpperCase()) ? 1 : 0;
+    const isCorrect = (['A', 'B', 'C', 'D'].includes(normalizedOption) && question.correct_option.trim().toUpperCase() === normalizedOption) ? 1 : 0;
     const answerId = `ANS-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
 
     // Transaction to insert answer, advance pointer, and update assessment state
@@ -290,7 +292,7 @@ export function submitAnswer(req, res) {
       db.prepare(`
         INSERT INTO answers (id, assessment_id, question_id, selected_option, is_correct)
         VALUES (?, ?, ?, ?, ?)
-      `).run(answerId, assessmentId, questionId, selectedOption.toUpperCase(), isCorrect);
+      `).run(answerId, assessmentId, questionId, normalizedOption, isCorrect);
 
       const nextIndex = currentIndex + 1;
       const isFinished = nextIndex >= questionSequence.length;
