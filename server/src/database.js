@@ -51,7 +51,7 @@ export function initDatabase() {
       current_question_index INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'NOT_STARTED',
       question_sequence TEXT NOT NULL,
-      total_questions INTEGER NOT NULL DEFAULT 40,
+      total_questions INTEGER NOT NULL DEFAULT 50,
       score INTEGER DEFAULT 0,
       completion_reason TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -483,8 +483,101 @@ function seedQuestions() {
       'Write it on a shared public whiteboard',
       'Email it to your personal email account',
       'B'
+    ],
+
+    // Questions 41-50 (Total 50 Curated Questions)
+    [
+      41, 'Section A: HTML', 'Semantic Elements',
+      'Which HTML5 semantic tag is best suited to represent the primary navigation links of a website?',
+      '<nav>',
+      '<menu>',
+      '<links>',
+      '<navigate>',
+      'A'
+    ],
+    [
+      42, 'Section A: HTML', 'Line Breaks',
+      'Which HTML tag is used to insert a single line break without creating an entire new paragraph?',
+      '<lb>',
+      '<break>',
+      '<br>',
+      '<newline>',
+      'C'
+    ],
+    [
+      43, 'Section B: CSS', 'Backgrounds',
+      'Which CSS property is used to define the background color of an element?',
+      'color',
+      'background-color',
+      'bgcolor',
+      'canvas-color',
+      'B'
+    ],
+    [
+      44, 'Section B: CSS', 'Rounded Corners',
+      'Which CSS property is used to create rounded border corners on a card or button?',
+      'corner-round',
+      'border-radius',
+      'curve',
+      'edge-radius',
+      'B'
+    ],
+    [
+      45, 'Section C: JavaScript', 'Functions',
+      'Which keyword is used to declare a standard reusable function in JavaScript?',
+      'def',
+      'func',
+      'function',
+      'method',
+      'C'
+    ],
+    [
+      46, 'Section C: JavaScript', 'Dialogs',
+      'Which built-in JavaScript method displays a modal popup box with a message and an OK button?',
+      'alert()',
+      'popup()',
+      'msg()',
+      'dialog()',
+      'A'
+    ],
+    [
+      47, 'Section D: Logical Reasoning & Aptitude', 'Time & Work',
+      'If 1 worker can paint a room in 4 hours, how many hours will 2 workers take working together at the same rate?',
+      '8 hours',
+      '4 hours',
+      '2 hours',
+      '1 hour',
+      'C'
+    ],
+    [
+      48, 'Section D: Logical Reasoning & Aptitude', 'Averages',
+      'What is the arithmetic mean (average) of the numbers 10, 20, and 30?',
+      '15',
+      '20',
+      '25',
+      '30',
+      'B'
+    ],
+    [
+      49, 'Section E: Workplace Awareness & Communication', 'Punctuality',
+      'What is the most responsible step to take if an unavoidable emergency makes you late for work or a team meeting?',
+      'Notify your team lead or manager immediately with an update',
+      'Turn off your phone and avoid contact',
+      'Show up hours later without explaining',
+      'Pretend you were not invited',
+      'A'
+    ],
+    [
+      50, 'Section E: Workplace Awareness & Communication', 'Accountability',
+      'If you notice a mistake you made in your work, what is the best professional approach?',
+      'Ignore it and hope nobody notices',
+      'Acknowledge the mistake, inform your lead, and take initiative to fix it',
+      'Blame a teammate',
+      'Delete the project files',
+      'B'
     ]
   ];
+
 
   const insertMany = db.transaction((items) => {
     for (const q of items) {

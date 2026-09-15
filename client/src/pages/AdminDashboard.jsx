@@ -665,7 +665,7 @@ export default function AdminDashboard() {
                     <div>
                       <div className="text-gray-400">Total Score</div>
                       <div className="font-bold text-[#146C43] dark:text-emerald-400 text-sm">
-                        {candidateAudit?.candidate?.score} / {candidateAudit?.candidate?.totalQuestions} ({Math.round(((candidateAudit?.candidate?.score || 0) / (candidateAudit?.candidate?.totalQuestions || 40)) * 100)}%)
+                        {candidateAudit?.candidate?.score} / {candidateAudit?.candidate?.totalQuestions} ({Math.round(((candidateAudit?.candidate?.score || 0) / (candidateAudit?.candidate?.totalQuestions || 50)) * 100)}%)
                       </div>
                     </div>
                   </div>
@@ -735,7 +735,7 @@ export default function AdminDashboard() {
                               : 'text-gray-500 hover:text-rose-600'
                           }`}
                         >
-                          Incorrect ({(candidateAudit?.candidate?.totalQuestions || 40) - (candidateAudit?.candidate?.score || 0)})
+                          Incorrect ({(candidateAudit?.candidate?.totalQuestions || 50) - (candidateAudit?.candidate?.score || 0)})
                         </button>
                       </div>
                     </div>
