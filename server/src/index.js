@@ -22,8 +22,8 @@ const PORT = process.env.PORT || 5000;
 // Initialize Database Schema & Seed Data
 initDatabase();
 
-// Initialize 24-Hour Auto-Retention Data Purge Cron
-initRetentionCleanupCron();
+// Retention Auto-Purge Disabled to prevent data loss
+// initRetentionCleanupCron();
 
 // Middleware
 app.use(cors({
