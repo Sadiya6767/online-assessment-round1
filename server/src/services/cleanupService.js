@@ -11,21 +11,20 @@ const RETENTION_HOURS = parseInt(process.env.RETENTION_HOURS || '24', 10);
 const RETENTION_MS = RETENTION_HOURS * 60 * 60 * 1000;
 
 /**
- * Automatically purges candidate records and uploaded resumes older than 24 hours.
+ * Manual purge endpoint handler (if admin explicitly triggers it)
  */
-export function purgeExpiredRecords() {
+export async function purgeExpiredRecords() {
   try {
     const cutoffTime = new Date(Date.now() - RETENTION_MS).toISOString();
 
-    // Find candidates registered before cutoff time
-    const expiredCandidates = db.prepare(`
+    const expiredCandidates = await db.all(`
       SELECT id, full_name, resume_file_path, created_at 
       FROM candidates 
       WHERE created_at < ?
-    `).all(cutoffTime);
+    `, [cutoffTime]);
 
     if (expiredCandidates.length === 0) {
-      return { purgedCount: 0, message: 'No records older than 24 hours found.' };
+      return { purgedCount: 0, message: 'No records older than retention threshold found.' };
     }
 
     let deletedFiles = 0;
@@ -42,36 +41,26 @@ export function purgeExpiredRecords() {
         }
       }
 
-      // Deleting candidate triggers CASCADE delete on assessments and answers
-      db.prepare('DELETE FROM candidates WHERE id = ?').run(cand.id);
+      await db.run('DELETE FROM candidates WHERE id = ?', [cand.id]);
     }
 
-    console.log(`🧹 Auto-Retention Cleanup: Purged ${expiredCandidates.length} expired candidate records and ${deletedFiles} resumes (>24h old).`);
+    console.log(`Auto-Retention Cleanup: Purged ${expiredCandidates.length} candidate records.`);
 
     return {
       purgedCount: expiredCandidates.length,
       deletedFiles,
       cutoffTime,
-      message: `Successfully purged ${expiredCandidates.length} records older than ${RETENTION_HOURS} hours.`
+      message: `Successfully purged ${expiredCandidates.length} records.`
     };
   } catch (error) {
-    console.error('Error during auto-retention cleanup:', error);
+    console.error('Error during cleanup:', error);
     return { error: error.message };
   }
 }
 
 /**
- * Initializes automatic background interval running every 30 minutes.
+ * Retention cron is disabled by default to prevent unwanted data loss
  */
 export function initRetentionCleanupCron() {
-  console.log(`🛡️ 24-Hour Data Retention Policy active (records auto-purge after ${RETENTION_HOURS} hours).`);
-  
-  // Run once on startup
-  purgeExpiredRecords();
-
-  // Run automatically every 30 minutes
-  const INTERVAL_MS = 30 * 60 * 1000;
-  setInterval(() => {
-    purgeExpiredRecords();
-  }, INTERVAL_MS);
+  console.log('🛡️ Auto-purge cron is disabled to protect candidate records.');
 }

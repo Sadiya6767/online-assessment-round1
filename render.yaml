@@ -10,7 +10,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: RETENTION_HOURS
-        value: "24"
+      - key: DATABASE_URL
+        value: "postgresql://neondb_owner:npg_VqvEyua1JCz3@ep-cool-dew-b3gswcml-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
       - key: JWT_SECRET
         generateValue: true

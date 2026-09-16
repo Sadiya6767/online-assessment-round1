@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDir = path.join(__dirname, '..', '..', 'uploads');
 
-export function adminLogin(req, res) {
+export async function adminLogin(req, res) {
   try {
     const { email, password } = req.body;
 
@@ -18,7 +18,7 @@ export function adminLogin(req, res) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const admin = db.prepare('SELECT * FROM admins WHERE email = ?').get(email.trim().toLowerCase());
+    const admin = await db.get('SELECT * FROM admins WHERE email = ?', [email.trim().toLowerCase()]);
     if (!admin) {
       return res.status(401).json({ error: 'Invalid admin credentials.' });
     }
@@ -45,19 +45,25 @@ export function adminLogin(req, res) {
   }
 }
 
-export function getDashboardStats(req, res) {
+export async function getDashboardStats(req, res) {
   try {
-    const totalCandidates = db.prepare('SELECT COUNT(*) as count FROM candidates').get().count;
-    const totalAttempts = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE status != 'NOT_STARTED'").get().count;
-    const completed = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE status = 'COMPLETED'").get().count;
-    const inProgress = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE status = 'IN_PROGRESS'").get().count;
-    const timedOut = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE status = 'TIMED_OUT'").get().count;
+    const totalCandidatesRow = await db.get('SELECT COUNT(*) as count FROM candidates');
+    const totalAttemptsRow = await db.get("SELECT COUNT(*) as count FROM assessments WHERE status != 'NOT_STARTED'");
+    const completedRow = await db.get("SELECT COUNT(*) as count FROM assessments WHERE status = 'COMPLETED'");
+    const inProgressRow = await db.get("SELECT COUNT(*) as count FROM assessments WHERE status = 'IN_PROGRESS'");
+    const timedOutRow = await db.get("SELECT COUNT(*) as count FROM assessments WHERE status = 'TIMED_OUT'");
     
-    // Internal qualifying criteria: >= 60% of total questions
-    const qualified = db.prepare("SELECT COUNT(*) as count FROM assessments WHERE (CAST(score AS FLOAT) / total_questions) >= 0.6 AND status IN ('COMPLETED', 'TIMED_OUT')").get().count;
+    // Qualifying criteria: >= 60% of total questions
+    const qualifiedRow = await db.get("SELECT COUNT(*) as count FROM assessments WHERE (score * 1.0 / total_questions) >= 0.6 AND status IN ('COMPLETED', 'TIMED_OUT')");
+    const avgScoreRow = await db.get("SELECT AVG(score) as \"avgScore\" FROM assessments WHERE status IN ('COMPLETED', 'TIMED_OUT')");
 
-    const avgScoreRow = db.prepare("SELECT AVG(score) as avgScore FROM assessments WHERE status IN ('COMPLETED', 'TIMED_OUT')").get();
-    const averageScore = avgScoreRow && avgScoreRow.avgScore ? Math.round(avgScoreRow.avgScore * 10) / 10 : 0;
+    const totalCandidates = parseInt(totalCandidatesRow?.count || 0, 10);
+    const totalAttempts = parseInt(totalAttemptsRow?.count || 0, 10);
+    const completed = parseInt(completedRow?.count || 0, 10);
+    const inProgress = parseInt(inProgressRow?.count || 0, 10);
+    const timedOut = parseInt(timedOutRow?.count || 0, 10);
+    const qualified = parseInt(qualifiedRow?.count || 0, 10);
+    const averageScore = avgScoreRow && avgScoreRow.avgScore ? Math.round(parseFloat(avgScoreRow.avgScore) * 10) / 10 : 0;
 
     return res.json({
       totalCandidates,
@@ -75,9 +81,9 @@ export function getDashboardStats(req, res) {
   }
 }
 
-export function triggerRetentionPurge(req, res) {
+export async function triggerRetentionPurge(req, res) {
   try {
-    const result = purgeExpiredRecords();
+    const result = await purgeExpiredRecords();
     return res.json(result);
   } catch (error) {
     console.error('Error in retention purge:', error);
@@ -85,32 +91,32 @@ export function triggerRetentionPurge(req, res) {
   }
 }
 
-export function getCandidates(req, res) {
+export async function getCandidates(req, res) {
   try {
     const { search, status, gradYear, percentageRange, profile } = req.query;
 
     let query = `
       SELECT 
-        c.id as candidateId,
-        c.full_name as fullName,
-        c.interested_profile as interestedProfile,
+        c.id as "candidateId",
+        c.full_name as "fullName",
+        c.interested_profile as "interestedProfile",
         c.degree,
         c.semester,
         c.year,
         c.branch,
-        c.college_name as collegeName,
-        c.graduation_year as graduationYear,
+        c.college_name as "collegeName",
+        c.graduation_year as "graduationYear",
         c.email,
         c.phone,
-        c.resume_file_path as resumeFilePath,
-        c.created_at as registeredAt,
-        a.id as assessmentId,
-        a.status as testStatus,
+        c.resume_file_path as "resumeFilePath",
+        c.created_at as "registeredAt",
+        a.id as "assessmentId",
+        a.status as "testStatus",
         a.score,
-        a.total_questions as totalQuestions,
-        a.start_time as startTime,
-        a.submission_time as submissionTime,
-        a.completion_reason as completionReason
+        a.total_questions as "totalQuestions",
+        a.start_time as "startTime",
+        a.submission_time as "submissionTime",
+        a.completion_reason as "completionReason"
       FROM candidates c
       LEFT JOIN assessments a ON c.id = a.candidate_id
       WHERE 1=1
@@ -119,7 +125,7 @@ export function getCandidates(req, res) {
     const params = [];
 
     if (search && search.trim()) {
-      query += ` AND (c.full_name LIKE ? OR c.email LIKE ? OR c.college_name LIKE ? OR c.phone LIKE ?)`;
+      query += ` AND (c.full_name ILIKE ? OR c.email ILIKE ? OR c.college_name ILIKE ? OR c.phone ILIKE ?)`;
       const term = `%${search.trim()}%`;
       params.push(term, term, term, term);
     }
@@ -142,21 +148,21 @@ export function getCandidates(req, res) {
     // Percentage Range Filter
     if (percentageRange && percentageRange !== 'ALL') {
       if (percentageRange === '90-100') {
-        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (CAST(a.score AS FLOAT) / a.total_questions * 100) >= 90`;
+        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (a.score * 100.0 / a.total_questions) >= 90`;
       } else if (percentageRange === '75-89') {
-        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (CAST(a.score AS FLOAT) / a.total_questions * 100) >= 75 AND (CAST(a.score AS FLOAT) / a.total_questions * 100) < 90`;
+        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (a.score * 100.0 / a.total_questions) >= 75 AND (a.score * 100.0 / a.total_questions) < 90`;
       } else if (percentageRange === '60-74') {
-        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (CAST(a.score AS FLOAT) / a.total_questions * 100) >= 60 AND (CAST(a.score AS FLOAT) / a.total_questions * 100) < 75`;
+        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (a.score * 100.0 / a.total_questions) >= 60 AND (a.score * 100.0 / a.total_questions) < 75`;
       } else if (percentageRange === '40-59') {
-        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (CAST(a.score AS FLOAT) / a.total_questions * 100) >= 40 AND (CAST(a.score AS FLOAT) / a.total_questions * 100) < 60`;
+        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (a.score * 100.0 / a.total_questions) >= 40 AND (a.score * 100.0 / a.total_questions) < 60`;
       } else if (percentageRange === '0-39') {
-        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (CAST(a.score AS FLOAT) / a.total_questions * 100) < 40`;
+        query += ` AND a.status IN ('COMPLETED', 'TIMED_OUT') AND (a.score * 100.0 / a.total_questions) < 40`;
       }
     }
 
     query += ` ORDER BY c.created_at DESC`;
 
-    const candidates = db.prepare(query).all(...params);
+    const candidates = await db.all(query, params);
 
     return res.json({
       candidates: candidates.map(c => ({
@@ -170,62 +176,62 @@ export function getCandidates(req, res) {
   }
 }
 
-export function getCandidateDetails(req, res) {
+export async function getCandidateDetails(req, res) {
   try {
     const { id } = req.params;
 
-    const candidate = db.prepare(`
+    const candidate = await db.get(`
       SELECT 
-        c.id as candidateId,
-        c.full_name as fullName,
-        c.interested_profile as interestedProfile,
+        c.id as "candidateId",
+        c.full_name as "fullName",
+        c.interested_profile as "interestedProfile",
         c.degree,
         c.semester,
         c.year,
         c.branch,
-        c.college_name as collegeName,
-        c.graduation_year as graduationYear,
+        c.college_name as "collegeName",
+        c.graduation_year as "graduationYear",
         c.email,
         c.phone,
-        c.resume_file_path as resumeFilePath,
-        c.created_at as registeredAt,
-        a.id as assessmentId,
-        a.status as testStatus,
+        c.resume_file_path as "resumeFilePath",
+        c.created_at as "registeredAt",
+        a.id as "assessmentId",
+        a.status as "testStatus",
         a.score,
-        a.total_questions as totalQuestions,
-        a.start_time as startTime,
+        a.total_questions as "totalQuestions",
+        a.start_time as "startTime",
         a.deadline,
-        a.submission_time as submissionTime,
-        a.completion_reason as completionReason
+        a.submission_time as "submissionTime",
+        a.completion_reason as "completionReason"
       FROM candidates c
       LEFT JOIN assessments a ON c.id = a.candidate_id
       WHERE c.id = ? OR a.id = ?
-    `).get(id, id);
+    `, [id, id]);
 
     if (!candidate) {
       return res.status(404).json({ error: 'Candidate not found.' });
     }
 
     // Fetch candidate answers
-    const answers = db.prepare(`
+    const answers = await db.all(`
       SELECT 
-        ans.question_id,
-        ans.selected_option,
-        ans.is_correct,
-        ans.answered_at,
+        ans.question_id as "questionId",
+        ans.selected_option as "selectedOption",
+        ans.is_correct as "isCorrect",
+        ans.answered_at as "answeredAt",
         q.section,
         q.topic,
-        q.question_text,
-        q.option_a,
-        q.option_b,
-        q.option_c,
-        q.option_d,
-        q.correct_option
+        q.question_text as "questionText",
+        q.option_a as "optionA",
+        q.option_b as "optionB",
+        q.option_c as "optionC",
+        q.option_d as "optionD",
+        q.correct_option as "correctOption"
       FROM answers ans
       JOIN questions q ON ans.question_id = q.id
       WHERE ans.assessment_id = ?
       ORDER BY ans.answered_at ASC
-    `).all(candidate.assessmentId);
+    `, [candidate.assessmentId]);
 
     // Calculate section-wise breakdown for admin
     const sectionStats = {};
@@ -235,7 +241,7 @@ export function getCandidateDetails(req, res) {
         sectionStats[secName] = { total: 0, correct: 0 };
       }
       sectionStats[secName].total += 1;
-      if (a.is_correct) {
+      if (a.isCorrect) {
         sectionStats[secName].correct += 1;
       }
     });
@@ -268,32 +274,32 @@ export function downloadResume(req, res) {
   }
 }
 
-export function exportCSV(req, res) {
+export async function exportCSV(req, res) {
   try {
-    const rows = db.prepare(`
+    const rows = await db.all(`
       SELECT 
-        c.id as Candidate_ID,
-        c.full_name as Full_Name,
-        c.interested_profile as Interested_Profile,
-        c.email as Email,
-        c.phone as Phone,
-        c.degree as Degree,
-        c.branch as Branch,
-        c.year as Year,
-        c.semester as Semester,
-        c.college_name as College,
-        c.graduation_year as Graduation_Year,
-        a.status as Status,
-        a.score as Score,
-        a.total_questions as Total_Questions,
-        ROUND((a.score * 100.0 / a.total_questions), 1) as Percentage,
-        a.start_time as Start_Time,
-        a.submission_time as Submission_Time,
-        a.completion_reason as Completion_Reason
+        c.id as "Candidate_ID",
+        c.full_name as "Full_Name",
+        c.interested_profile as "Interested_Profile",
+        c.email as "Email",
+        c.phone as "Phone",
+        c.degree as "Degree",
+        c.branch as "Branch",
+        c.year as "Year",
+        c.semester as "Semester",
+        c.college_name as "College",
+        c.graduation_year as "Graduation_Year",
+        a.status as "Status",
+        a.score as "Score",
+        a.total_questions as "Total_Questions",
+        ROUND((a.score * 100.0 / a.total_questions), 1) as "Percentage",
+        a.start_time as "Start_Time",
+        a.submission_time as "Submission_Time",
+        a.completion_reason as "Completion_Reason"
       FROM candidates c
       LEFT JOIN assessments a ON c.id = a.candidate_id
       ORDER BY c.created_at DESC
-    `).all();
+    `);
 
     if (rows.length === 0) {
       return res.send('No candidate records available for export.');
@@ -319,11 +325,11 @@ export function exportCSV(req, res) {
   }
 }
 
-export function deleteCandidate(req, res) {
+export async function deleteCandidate(req, res) {
   try {
     const { id } = req.params;
 
-    const candidate = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
+    const candidate = await db.get('SELECT * FROM candidates WHERE id = ?', [id]);
     if (!candidate) {
       return res.status(404).json({ error: 'Candidate record not found.' });
     }
@@ -340,7 +346,7 @@ export function deleteCandidate(req, res) {
       }
     }
 
-    db.prepare('DELETE FROM candidates WHERE id = ?').run(id);
+    await db.run('DELETE FROM candidates WHERE id = ?', [id]);
 
     return res.json({ message: 'Candidate record successfully deleted.' });
   } catch (error) {

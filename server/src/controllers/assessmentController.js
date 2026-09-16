@@ -1,16 +1,16 @@
 import db from '../database.js';
 import crypto from 'crypto';
 
-export function startAssessment(req, res) {
+export async function startAssessment(req, res) {
   try {
     const { assessmentId } = req.params;
 
-    const assessment = db.prepare(`
+    const assessment = await db.get(`
       SELECT a.*, c.full_name 
       FROM assessments a
       JOIN candidates c ON a.candidate_id = c.id
       WHERE a.id = ?
-    `).get(assessmentId);
+    `, [assessmentId]);
 
     if (!assessment) {
       return res.status(404).json({ error: 'Assessment not found.' });
@@ -30,11 +30,11 @@ export function startAssessment(req, res) {
       // Generous overall ceiling: 45 minutes to allow per-question timers across all 50 questions
       const deadline = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
 
-      db.prepare(`
+      await db.run(`
         UPDATE assessments 
         SET status = 'IN_PROGRESS', start_time = ?, deadline = ?
         WHERE id = ?
-      `).run(startTime, deadline, assessmentId);
+      `, [startTime, deadline, assessmentId]);
 
       return res.json({
         message: 'Assessment started successfully.',
@@ -59,16 +59,16 @@ export function startAssessment(req, res) {
   }
 }
 
-export function getCurrentQuestion(req, res) {
+export async function getCurrentQuestion(req, res) {
   try {
     const { assessmentId } = req.params;
 
-    const assessment = db.prepare(`
+    const assessment = await db.get(`
       SELECT a.*, c.full_name, c.email, c.college_name, c.interested_profile
       FROM assessments a
       JOIN candidates c ON a.candidate_id = c.id
       WHERE a.id = ?
-    `).get(assessmentId);
+    `, [assessmentId]);
 
     if (!assessment) {
       return res.status(404).json({ error: 'Assessment not found.' });
@@ -89,11 +89,11 @@ export function getCurrentQuestion(req, res) {
       const startTime = now.toISOString();
       const deadline = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
 
-      db.prepare(`
+      await db.run(`
         UPDATE assessments 
         SET status = 'IN_PROGRESS', start_time = ?, deadline = ?
         WHERE id = ?
-      `).run(startTime, deadline, assessmentId);
+      `, [startTime, deadline, assessmentId]);
 
       assessment.status = 'IN_PROGRESS';
       assessment.start_time = startTime;
@@ -105,24 +105,24 @@ export function getCurrentQuestion(req, res) {
     const deadlineMs = new Date(assessment.deadline).getTime();
 
     if (nowMs >= deadlineMs) {
-      // 25-minute limit expired! Auto-submit
-      const scoreRow = db.prepare(`
-        SELECT COUNT(*) as correctCount 
+      // Time limit expired! Auto-submit
+      const scoreRow = await db.get(`
+        SELECT COUNT(*) as "correctCount" 
         FROM answers 
         WHERE assessment_id = ? AND is_correct = 1
-      `).get(assessmentId);
+      `, [assessmentId]);
 
-      const finalScore = scoreRow ? scoreRow.correctCount : 0;
+      const finalScore = scoreRow ? parseInt(scoreRow.correctCount, 10) : 0;
       const submissionTime = new Date().toISOString();
 
-      db.prepare(`
+      await db.run(`
         UPDATE assessments 
         SET status = 'TIMED_OUT', 
-            completion_reason = '25-Minute Time Limit Expired', 
+            completion_reason = 'Time Limit Expired', 
             submission_time = ?,
             score = ?
         WHERE id = ?
-      `).run(submissionTime, finalScore, assessmentId);
+      `, [submissionTime, finalScore, assessmentId]);
 
       return res.json({
         completed: true,
@@ -132,28 +132,30 @@ export function getCurrentQuestion(req, res) {
     }
 
     const remainingSeconds = Math.max(0, Math.floor((deadlineMs - nowMs) / 1000));
-    const questionSequence = JSON.parse(assessment.question_sequence);
+    const questionSequence = typeof assessment.question_sequence === 'string'
+      ? JSON.parse(assessment.question_sequence)
+      : assessment.question_sequence;
     const currentIndex = assessment.current_question_index;
 
     // Check if candidate reached the end
     if (currentIndex >= questionSequence.length) {
-      const scoreRow = db.prepare(`
-        SELECT COUNT(*) as correctCount 
+      const scoreRow = await db.get(`
+        SELECT COUNT(*) as "correctCount" 
         FROM answers 
         WHERE assessment_id = ? AND is_correct = 1
-      `).get(assessmentId);
+      `, [assessmentId]);
 
-      const finalScore = scoreRow ? scoreRow.correctCount : 0;
+      const finalScore = scoreRow ? parseInt(scoreRow.correctCount, 10) : 0;
       const submissionTime = new Date().toISOString();
 
-      db.prepare(`
+      await db.run(`
         UPDATE assessments 
         SET status = 'COMPLETED', 
             completion_reason = 'All Questions Answered', 
             submission_time = ?,
             score = ?
         WHERE id = ?
-      `).run(submissionTime, finalScore, assessmentId);
+      `, [submissionTime, finalScore, assessmentId]);
 
       return res.json({
         completed: true,
@@ -163,11 +165,11 @@ export function getCurrentQuestion(req, res) {
     }
 
     const currentQuestionId = questionSequence[currentIndex];
-    const question = db.prepare(`
+    const question = await db.get(`
       SELECT id, section, topic, question_text, option_a, option_b, option_c, option_d 
       FROM questions 
       WHERE id = ?
-    `).get(currentQuestionId);
+    `, [currentQuestionId]);
 
     if (!question) {
       return res.status(500).json({ error: 'Question data missing in bank.' });
@@ -200,26 +202,29 @@ export function getCurrentQuestion(req, res) {
   }
 }
 
-export function submitAnswer(req, res) {
+export async function submitAnswer(req, res) {
+  const client = await db.getClient();
   try {
     const { assessmentId } = req.params;
     const { questionId, selectedOption } = req.body;
     const normalizedOption = (selectedOption || '').trim().toUpperCase();
 
     if (!['A', 'B', 'C', 'D', 'TIMEOUT', 'SKIPPED'].includes(normalizedOption)) {
+      client.release();
       return res.status(400).json({ error: 'Invalid answer option.' });
     }
 
-
-    const assessment = db.prepare(`
+    const assessment = await db.get(`
       SELECT * FROM assessments WHERE id = ?
-    `).get(assessmentId);
+    `, [assessmentId]);
 
     if (!assessment) {
+      client.release();
       return res.status(404).json({ error: 'Assessment not found.' });
     }
 
     if (assessment.status === 'COMPLETED' || assessment.status === 'TIMED_OUT') {
+      client.release();
       return res.status(400).json({
         error: 'Assessment is already completed.',
         completed: true,
@@ -232,24 +237,25 @@ export function submitAnswer(req, res) {
     const deadlineMs = new Date(assessment.deadline).getTime();
 
     if (nowMs >= deadlineMs) {
-      const scoreRow = db.prepare(`
-        SELECT COUNT(*) as correctCount 
+      const scoreRow = await db.get(`
+        SELECT COUNT(*) as "correctCount" 
         FROM answers 
         WHERE assessment_id = ? AND is_correct = 1
-      `).get(assessmentId);
+      `, [assessmentId]);
 
-      const finalScore = scoreRow ? scoreRow.correctCount : 0;
+      const finalScore = scoreRow ? parseInt(scoreRow.correctCount, 10) : 0;
       const submissionTime = new Date().toISOString();
 
-      db.prepare(`
+      await db.run(`
         UPDATE assessments 
         SET status = 'TIMED_OUT', 
-            completion_reason = '25-Minute Time Limit Expired', 
+            completion_reason = 'Time Limit Expired', 
             submission_time = ?,
             score = ?
         WHERE id = ?
-      `).run(submissionTime, finalScore, assessmentId);
+      `, [submissionTime, finalScore, assessmentId]);
 
+      client.release();
       return res.json({
         completed: true,
         status: 'TIMED_OUT',
@@ -257,31 +263,36 @@ export function submitAnswer(req, res) {
       });
     }
 
-    const questionSequence = JSON.parse(assessment.question_sequence);
+    const questionSequence = typeof assessment.question_sequence === 'string'
+      ? JSON.parse(assessment.question_sequence)
+      : assessment.question_sequence;
     const currentIndex = assessment.current_question_index;
     const expectedQuestionId = questionSequence[currentIndex];
 
     // Anti-tampering check: ensure candidate is answering the expected question
     if (parseInt(questionId, 10) !== expectedQuestionId) {
+      client.release();
       return res.status(400).json({
         error: 'Out-of-order submission. You can only answer the current question.'
       });
     }
 
     // Check if question already answered
-    const existingAnswer = db.prepare(`
+    const existingAnswer = await db.get(`
       SELECT id FROM answers WHERE assessment_id = ? AND question_id = ?
-    `).get(assessmentId, questionId);
+    `, [assessmentId, questionId]);
 
     if (existingAnswer) {
+      client.release();
       return res.status(400).json({
         error: 'An answer has already been submitted for this question. Modification is not allowed.'
       });
     }
 
     // Evaluate answer against database (never exposed to client)
-    const question = db.prepare('SELECT correct_option FROM questions WHERE id = ?').get(questionId);
+    const question = await db.get('SELECT correct_option FROM questions WHERE id = ?', [questionId]);
     if (!question) {
+      client.release();
       return res.status(404).json({ error: 'Question not found.' });
     }
 
@@ -289,68 +300,74 @@ export function submitAnswer(req, res) {
     const answerId = `ANS-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
 
     // Transaction to insert answer, advance pointer, and update assessment state
-    const submitTransaction = db.transaction(() => {
-      db.prepare(`
-        INSERT INTO answers (id, assessment_id, question_id, selected_option, is_correct)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(answerId, assessmentId, questionId, normalizedOption, isCorrect);
+    await client.query('BEGIN');
 
-      const nextIndex = currentIndex + 1;
-      const isFinished = nextIndex >= questionSequence.length;
+    await client.query(`
+      INSERT INTO answers (id, assessment_id, question_id, selected_option, is_correct)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [answerId, assessmentId, questionId, normalizedOption, isCorrect]);
 
-      // Recalculate score
-      const currentScore = db.prepare(`
-        SELECT COUNT(*) as count FROM answers WHERE assessment_id = ? AND is_correct = 1
-      `).get(assessmentId).count;
+    const nextIndex = currentIndex + 1;
+    const isFinished = nextIndex >= questionSequence.length;
 
-      if (isFinished) {
-        const submissionTime = new Date().toISOString();
-        db.prepare(`
-          UPDATE assessments 
-          SET current_question_index = ?, 
-              score = ?, 
-              status = 'COMPLETED', 
-              completion_reason = 'All Questions Answered', 
-              submission_time = ?
-          WHERE id = ?
-        `).run(nextIndex, currentScore, submissionTime, assessmentId);
-      } else {
-        db.prepare(`
-          UPDATE assessments 
-          SET current_question_index = ?, 
-              score = ?
-          WHERE id = ?
-        `).run(nextIndex, currentScore, assessmentId);
-      }
+    // Recalculate score
+    const scoreRes = await client.query(`
+      SELECT COUNT(*) as count FROM answers WHERE assessment_id = $1 AND is_correct = 1
+    `, [assessmentId]);
+    const currentScore = parseInt(scoreRes.rows[0].count, 10);
 
-      return { nextIndex, isFinished };
-    });
+    if (isFinished) {
+      const submissionTime = new Date().toISOString();
+      await client.query(`
+        UPDATE assessments 
+        SET current_question_index = $1, 
+            score = $2, 
+            status = 'COMPLETED', 
+            completion_reason = 'All Questions Answered', 
+            submission_time = $3
+        WHERE id = $4
+      `, [nextIndex, currentScore, submissionTime, assessmentId]);
+    } else {
+      await client.query(`
+        UPDATE assessments 
+        SET current_question_index = $1, 
+            score = $2
+        WHERE id = $3
+      `, [nextIndex, currentScore, assessmentId]);
+    }
 
-    const result = submitTransaction();
+    await client.query('COMMIT');
+    client.release();
 
     return res.json({
       success: true,
-      completed: result.isFinished,
-      nextQuestionNumber: result.nextIndex + 1
+      completed: isFinished,
+      nextQuestionNumber: nextIndex + 1
     });
   } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rbErr) {
+      // rollback error ignored
+    }
+    client.release();
     console.error('Error submitting answer:', error);
     return res.status(500).json({ error: 'Failed to record answer.' });
   }
 }
 
-export function getAssessmentStatus(req, res) {
+export async function getAssessmentStatus(req, res) {
   try {
     const { assessmentId } = req.params;
 
-    const assessment = db.prepare(`
-      SELECT a.id as assessmentId, a.status, a.submission_time as submissionTime, 
-             a.completion_reason as completionReason, a.total_questions as totalQuestions,
-             c.id as candidateId, c.full_name as candidateName, c.email, c.college_name as collegeName
+    const assessment = await db.get(`
+      SELECT a.id as "assessmentId", a.status, a.submission_time as "submissionTime", 
+             a.completion_reason as "completionReason", a.total_questions as "totalQuestions",
+             c.id as "candidateId", c.full_name as "candidateName", c.email, c.college_name as "collegeName"
       FROM assessments a
       JOIN candidates c ON a.candidate_id = c.id
       WHERE a.id = ?
-    `).get(assessmentId);
+    `, [assessmentId]);
 
     if (!assessment) {
       return res.status(404).json({ error: 'Assessment record not found.' });

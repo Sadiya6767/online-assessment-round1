@@ -17,7 +17,7 @@ function shuffleArray(array) {
   return shuffled;
 }
 
-export function registerCandidate(req, res) {
+export async function registerCandidate(req, res) {
   try {
     const {
       fullName,
@@ -100,9 +100,9 @@ export function registerCandidate(req, res) {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Check if candidate already registered with completed or in-progress test
-    const existingCandidate = db.prepare('SELECT id, interested_profile FROM candidates WHERE email = ?').get(normalizedEmail);
+    const existingCandidate = await db.get('SELECT id, interested_profile FROM candidates WHERE email = ?', [normalizedEmail]);
     if (existingCandidate) {
-      const existingAssessment = db.prepare('SELECT id, status FROM assessments WHERE candidate_id = ?').get(existingCandidate.id);
+      const existingAssessment = await db.get('SELECT id, status FROM assessments WHERE candidate_id = ?', [existingCandidate.id]);
       if (existingAssessment) {
         if (existingAssessment.status === 'COMPLETED' || existingAssessment.status === 'TIMED_OUT') {
           return res.status(400).json({
@@ -128,22 +128,22 @@ export function registerCandidate(req, res) {
 
     // Select questions: 40 Common (Web Dev + Aptitude) + 10 Profile Specific
     const targetProfileCode = VALID_PROFILES[chosenProfile];
-    const eligibleQuestions = db.prepare(`
+    const eligibleQuestions = await db.all(`
       SELECT id FROM questions 
       WHERE target_profile = 'COMMON' OR target_profile = ? 
       ORDER BY id ASC
-    `).all(targetProfileCode);
+    `, [targetProfileCode]);
 
     const questionIds = eligibleQuestions.map(q => q.id);
     const randomizedSequence = shuffleArray(questionIds);
 
     // Insert Candidate
-    db.prepare(`
+    await db.run(`
       INSERT INTO candidates (
         id, full_name, interested_profile, degree, semester, year, branch, college_name,
         graduation_year, email, phone, resume_file_path, consent_given
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       candidateId,
       fullName.trim(),
       chosenProfile,
@@ -157,21 +157,21 @@ export function registerCandidate(req, res) {
       phoneClean,
       file.filename,
       1
-    );
+    ]);
 
     // Insert Assessment Record with profile name and randomized sequence
-    db.prepare(`
+    await db.run(`
       INSERT INTO assessments (
         id, candidate_id, assessment_name, status, question_sequence, total_questions
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       assessmentId,
       candidateId,
       `Round 1 – ${chosenProfile}`,
       'NOT_STARTED',
       JSON.stringify(randomizedSequence),
       randomizedSequence.length
-    );
+    ]);
 
     return res.status(201).json({
       message: 'Registration successful',

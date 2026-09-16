@@ -20,10 +20,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Initialize Database Schema & Seed Data
-initDatabase();
-
-// Retention Auto-Purge Disabled to prevent data loss
-// initRetentionCleanupCron();
+initDatabase().catch(err => {
+  console.error('CRITICAL: Database initialization failed:', err);
+});
 
 // Middleware
 app.use(cors({
