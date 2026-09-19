@@ -1,5 +1,23 @@
 import db from '../database.js';
 import crypto from 'crypto';
+import { questions } from '../questionsData.js';
+
+// High-speed In-Memory Question Cache for zero-latency lookup
+const questionsMap = new Map();
+for (const q of questions) {
+  questionsMap.set(q[0], {
+    id: q[0],
+    target_profile: q[1],
+    section: q[2],
+    topic: q[3],
+    question_text: q[4],
+    option_a: q[5],
+    option_b: q[6],
+    option_c: q[7],
+    option_d: q[8],
+    correct_option: q[9]
+  });
+}
 
 export async function startAssessment(req, res) {
   try {
@@ -27,7 +45,6 @@ export async function startAssessment(req, res) {
     if (assessment.status === 'NOT_STARTED') {
       const now = new Date();
       const startTime = now.toISOString();
-      // Generous overall ceiling: 45 minutes to allow per-question timers across all 50 questions
       const deadline = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
 
       await db.run(`
@@ -45,7 +62,6 @@ export async function startAssessment(req, res) {
       });
     }
 
-    // Already in progress - return current deadline
     return res.json({
       message: 'Assessment in progress.',
       status: assessment.status,
@@ -74,7 +90,6 @@ export async function getCurrentQuestion(req, res) {
       return res.status(404).json({ error: 'Assessment not found.' });
     }
 
-    // If assessment already completed or timed out
     if (assessment.status === 'COMPLETED' || assessment.status === 'TIMED_OUT') {
       return res.json({
         completed: true,
@@ -83,7 +98,6 @@ export async function getCurrentQuestion(req, res) {
       });
     }
 
-    // If not started yet, auto-start
     if (assessment.status === 'NOT_STARTED') {
       const now = new Date();
       const startTime = now.toISOString();
@@ -100,12 +114,10 @@ export async function getCurrentQuestion(req, res) {
       assessment.deadline = deadline;
     }
 
-    // Check server deadline authority
     const nowMs = Date.now();
     const deadlineMs = new Date(assessment.deadline).getTime();
 
     if (nowMs >= deadlineMs) {
-      // Time limit expired! Auto-submit
       const scoreRow = await db.get(`
         SELECT COUNT(*) as "correctCount" 
         FROM answers 
@@ -137,7 +149,6 @@ export async function getCurrentQuestion(req, res) {
       : assessment.question_sequence;
     const currentIndex = assessment.current_question_index;
 
-    // Check if candidate reached the end
     if (currentIndex >= questionSequence.length) {
       const scoreRow = await db.get(`
         SELECT COUNT(*) as "correctCount" 
@@ -165,11 +176,8 @@ export async function getCurrentQuestion(req, res) {
     }
 
     const currentQuestionId = questionSequence[currentIndex];
-    const question = await db.get(`
-      SELECT id, section, topic, question_text, option_a, option_b, option_c, option_d 
-      FROM questions 
-      WHERE id = ?
-    `, [currentQuestionId]);
+    // Ultra-fast memory cache lookup (0 database queries)
+    const question = questionsMap.get(currentQuestionId);
 
     if (!question) {
       return res.status(500).json({ error: 'Question data missing in bank.' });
@@ -203,14 +211,12 @@ export async function getCurrentQuestion(req, res) {
 }
 
 export async function submitAnswer(req, res) {
-  const client = await db.getClient();
   try {
     const { assessmentId } = req.params;
     const { questionId, selectedOption } = req.body;
     const normalizedOption = (selectedOption || '').trim().toUpperCase();
 
     if (!['A', 'B', 'C', 'D', 'TIMEOUT', 'SKIPPED'].includes(normalizedOption)) {
-      client.release();
       return res.status(400).json({ error: 'Invalid answer option.' });
     }
 
@@ -219,12 +225,10 @@ export async function submitAnswer(req, res) {
     `, [assessmentId]);
 
     if (!assessment) {
-      client.release();
       return res.status(404).json({ error: 'Assessment not found.' });
     }
 
     if (assessment.status === 'COMPLETED' || assessment.status === 'TIMED_OUT') {
-      client.release();
       return res.status(400).json({
         error: 'Assessment is already completed.',
         completed: true,
@@ -255,7 +259,6 @@ export async function submitAnswer(req, res) {
         WHERE id = ?
       `, [submissionTime, finalScore, assessmentId]);
 
-      client.release();
       return res.json({
         completed: true,
         status: 'TIMED_OUT',
@@ -271,7 +274,6 @@ export async function submitAnswer(req, res) {
 
     // Anti-tampering check: ensure candidate is answering the expected question
     if (parseInt(questionId, 10) !== expectedQuestionId) {
-      client.release();
       return res.status(400).json({
         error: 'Out-of-order submission. You can only answer the current question.'
       });
@@ -283,61 +285,55 @@ export async function submitAnswer(req, res) {
     `, [assessmentId, questionId]);
 
     if (existingAnswer) {
-      client.release();
       return res.status(400).json({
         error: 'An answer has already been submitted for this question. Modification is not allowed.'
       });
     }
 
-    // Evaluate answer against database (never exposed to client)
-    const question = await db.get('SELECT correct_option FROM questions WHERE id = ?', [questionId]);
+    // Evaluate answer against in-memory question bank (0 DB queries)
+    const question = questionsMap.get(parseInt(questionId, 10));
     if (!question) {
-      client.release();
       return res.status(404).json({ error: 'Question not found.' });
     }
 
     const isCorrect = (['A', 'B', 'C', 'D'].includes(normalizedOption) && question.correct_option.trim().toUpperCase() === normalizedOption) ? 1 : 0;
     const answerId = `ANS-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
 
-    // Transaction to insert answer, advance pointer, and update assessment state
-    await client.query('BEGIN');
-
-    await client.query(`
+    // Fast atomic insert into answers table
+    await db.run(`
       INSERT INTO answers (id, assessment_id, question_id, selected_option, is_correct)
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (assessment_id, question_id) DO NOTHING
     `, [answerId, assessmentId, questionId, normalizedOption, isCorrect]);
 
     const nextIndex = currentIndex + 1;
     const isFinished = nextIndex >= questionSequence.length;
 
     // Recalculate score
-    const scoreRes = await client.query(`
-      SELECT COUNT(*) as count FROM answers WHERE assessment_id = $1 AND is_correct = 1
+    const scoreRes = await db.get(`
+      SELECT COUNT(*) as count FROM answers WHERE assessment_id = ? AND is_correct = 1
     `, [assessmentId]);
-    const currentScore = parseInt(scoreRes.rows[0].count, 10);
+    const currentScore = parseInt(scoreRes?.count || 0, 10);
 
     if (isFinished) {
       const submissionTime = new Date().toISOString();
-      await client.query(`
+      await db.run(`
         UPDATE assessments 
-        SET current_question_index = $1, 
-            score = $2, 
+        SET current_question_index = ?, 
+            score = ?, 
             status = 'COMPLETED', 
             completion_reason = 'All Questions Answered', 
-            submission_time = $3
-        WHERE id = $4
+            submission_time = ?
+        WHERE id = ?
       `, [nextIndex, currentScore, submissionTime, assessmentId]);
     } else {
-      await client.query(`
+      await db.run(`
         UPDATE assessments 
-        SET current_question_index = $1, 
-            score = $2
-        WHERE id = $3
+        SET current_question_index = ?, 
+            score = ?
+        WHERE id = ?
       `, [nextIndex, currentScore, assessmentId]);
     }
-
-    await client.query('COMMIT');
-    client.release();
 
     return res.json({
       success: true,
@@ -345,12 +341,6 @@ export async function submitAnswer(req, res) {
       nextQuestionNumber: nextIndex + 1
     });
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch (rbErr) {
-      // rollback error ignored
-    }
-    client.release();
     console.error('Error submitting answer:', error);
     return res.status(500).json({ error: 'Failed to record answer.' });
   }
@@ -373,7 +363,6 @@ export async function getAssessmentStatus(req, res) {
       return res.status(404).json({ error: 'Assessment record not found.' });
     }
 
-    // STRICTLY OMIT score, marks, percentage, and answers from candidate payload!
     return res.json({
       assessmentId: assessment.assessmentId,
       candidateId: assessment.candidateId,

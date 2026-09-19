@@ -28,7 +28,7 @@ export default function AssessmentRoom() {
   const questionStartTimeRef = useRef(Date.now());
   const isAutoAdvancingRef = useRef(false);
 
-  const fetchCurrentState = async () => {
+  const fetchCurrentState = async (retryCount = 0) => {
     try {
       setLoading(true);
       setError('');
@@ -52,6 +52,13 @@ export default function AssessmentRoom() {
       setIsSubmitting(false);
     } catch (err) {
       console.error('Failed to load assessment:', err);
+      // Auto-retry silently up to 3 times before displaying notice
+      if (retryCount < 3) {
+        setTimeout(() => {
+          fetchCurrentState(retryCount + 1);
+        }, 600);
+        return;
+      }
       setError(err.response?.data?.error || 'Failed to connect to assessment server. Please check your connection.');
     } finally {
       setLoading(false);
@@ -73,6 +80,16 @@ export default function AssessmentRoom() {
       if (questionIntervalRef.current) clearInterval(questionIntervalRef.current);
     };
   }, [assessmentId]);
+
+  // Auto-reconnect if notice ever appears
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => {
+      setError('');
+      fetchCurrentState();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [error]);
 
   // Synchronized 28-30s Per-Question Timer
   useEffect(() => {
@@ -115,8 +132,8 @@ export default function AssessmentRoom() {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
+    const fallbackChoice = selectedOption || 'TIMEOUT';
     try {
-      const fallbackChoice = selectedOption || 'TIMEOUT';
       const res = await assessmentAPI.submitAnswer(assessmentId, question.id, fallbackChoice);
 
       if (res.data.completed) {
@@ -125,8 +142,18 @@ export default function AssessmentRoom() {
         await fetchCurrentState();
       }
     } catch (err) {
-      console.warn('Auto-advance submission error:', err);
-      await fetchCurrentState();
+      console.warn('Auto-advance submission error, retrying:', err);
+      try {
+        await new Promise(r => setTimeout(r, 500));
+        const res2 = await assessmentAPI.submitAnswer(assessmentId, question.id, fallbackChoice);
+        if (res2.data.completed) {
+          navigate(`/test/${assessmentId}/completed`);
+        } else {
+          await fetchCurrentState();
+        }
+      } catch (err2) {
+        await fetchCurrentState();
+      }
     }
   };
 
@@ -144,18 +171,27 @@ export default function AssessmentRoom() {
       if (res.data.completed) {
         setTimeout(() => {
           navigate(`/test/${assessmentId}/completed`);
-        }, 300);
+        }, 200);
       } else {
         setTimeout(async () => {
           await fetchCurrentState();
-        }, 300);
+        }, 200);
       }
     } catch (err) {
-      console.error('Failed to submit answer:', err);
-      await fetchCurrentState();
+      console.error('Failed to submit answer, retrying:', err);
+      try {
+        await new Promise(r => setTimeout(r, 500));
+        const res2 = await assessmentAPI.submitAnswer(assessmentId, question.id, optionLabel);
+        if (res2.data.completed) {
+          navigate(`/test/${assessmentId}/completed`);
+        } else {
+          await fetchCurrentState();
+        }
+      } catch (err2) {
+        await fetchCurrentState();
+      }
     }
   };
-
 
   const progressPercentage = Math.round((currentQuestionNumber / totalQuestions) * 100);
 
@@ -174,9 +210,13 @@ export default function AssessmentRoom() {
         <div className="max-w-md w-full bg-white dark:bg-[#14221B] rounded-2xl border border-gray-200 dark:border-[#284033] p-6 shadow-soft text-center">
           <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto mb-3" />
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Session Notice</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 mb-6">{error}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 mb-2">{error}</p>
+          <p className="text-xs text-[#198754] font-medium mb-5 animate-pulse">Auto-reconnecting to server...</p>
           <button
-            onClick={fetchCurrentState}
+            onClick={() => {
+              setError('');
+              fetchCurrentState();
+            }}
             className="w-full py-2.5 px-4 bg-[#198754] hover:bg-[#146C43] text-white rounded-xl text-sm font-semibold transition-colors"
           >
             Retry Connection
