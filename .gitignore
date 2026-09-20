@@ -4,8 +4,8 @@ client/node_modules/
 server/node_modules/
 
 # Production Build outputs
-client/dist/
-dist/
+/dist/
+!client/dist/**
 
 # Database files & logs
 server/data/*.db

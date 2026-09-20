@@ -246,7 +246,7 @@ export default function CandidateRegistration() {
           <div className="bg-white/80 dark:bg-[#14221B]/80 backdrop-blur-xs border border-gray-200/80 dark:border-[#284033] rounded-2xl p-3 text-center shadow-card hover:border-[#198754]/40 transition-all">
             <Clock className="w-5 h-5 mx-auto text-[#198754] dark:text-emerald-400 mb-1" />
             <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Timer</div>
-            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">28s / Question</div>
+            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">12s / Question</div>
           </div>
           <div className="bg-white/80 dark:bg-[#14221B]/80 backdrop-blur-xs border border-gray-200/80 dark:border-[#284033] rounded-2xl p-3 text-center shadow-card hover:border-[#198754]/40 transition-all">
             <Briefcase className="w-5 h-5 mx-auto text-[#198754] dark:text-emerald-400 mb-1" />
