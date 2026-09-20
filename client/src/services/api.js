@@ -46,6 +46,7 @@ export const assessmentAPI = {
   getCurrentQuestion: (assessmentId) => api.get(`/assessment/${assessmentId}/current`),
   submitAnswer: (assessmentId, questionId, selectedOption) =>
     api.post(`/assessment/${assessmentId}/answer`, { questionId, selectedOption }),
+  recordViolation: (assessmentId, data) => api.post(`/assessment/${assessmentId}/violation`, data),
   getStatus: (assessmentId) => api.get(`/assessment/${assessmentId}/status`),
 };
 

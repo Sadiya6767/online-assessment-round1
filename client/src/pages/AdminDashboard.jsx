@@ -543,7 +543,14 @@ export default function AdminDashboard() {
 
                       {/* Status */}
                       <td className="py-3 px-4 whitespace-nowrap">
-                        {getStatusBadge(cand.testStatus)}
+                        <div className="flex flex-col items-start gap-1">
+                          {getStatusBadge(cand.testStatus)}
+                          {cand.tabSwitchCount > 0 && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
+                              <AlertTriangle className="w-2.5 h-2.5" /> {cand.tabSwitchCount} Tab {cand.tabSwitchCount > 1 ? 'Switches' : 'Switch'}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Score Column with Visual Progress Bar */}

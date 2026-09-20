@@ -89,10 +89,18 @@ export async function initDatabase() {
         question_sequence TEXT NOT NULL,
         total_questions INTEGER NOT NULL DEFAULT 50,
         score INTEGER DEFAULT 0,
+        tab_switch_count INTEGER DEFAULT 0,
         completion_reason TEXT,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Safe migration for tab_switch_count
+    try {
+      await pool.query('ALTER TABLE assessments ADD COLUMN IF NOT EXISTS tab_switch_count INTEGER DEFAULT 0;');
+    } catch (e) {
+      // Column already exists
+    }
 
     // 3. Answers Table
     await pool.query(`

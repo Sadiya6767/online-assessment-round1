@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, ShieldAlert, CheckCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { Clock, ShieldAlert, CheckCircle, AlertTriangle, Sparkles, ShieldCheck } from 'lucide-react';
 import { assessmentAPI } from '../services/api';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -16,13 +16,19 @@ export default function AssessmentRoom() {
   const [question, setQuestion] = useState(null);
   const [interestedProfile, setInterestedProfile] = useState(localStorage.getItem('nexis_interested_profile') || '');
 
-  // Per-Question Timer Configuration
-  // Active window: 28 seconds; Force auto-advances at 30 seconds
-  const QUESTION_TOTAL_DURATION = 30; // seconds
-  const [timerRatio, setTimerRatio] = useState(1.0); // 1.0 (full) down to 0.0 (empty)
+  // Strictly 10 seconds per question
+  const QUESTION_TOTAL_DURATION = 10;
+  const [timerRatio, setTimerRatio] = useState(1.0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoAdvanceAlert, setAutoAdvanceAlert] = useState(false);
+
+  // Anti-Cheating & Proctoring States
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [showStrikeModal, setShowStrikeModal] = useState(false);
+  const [isTerminated, setIsTerminated] = useState(false);
+  const lastViolationTimeRef = useRef(0);
+  const isCompletedRef = useRef(false);
 
   const questionIntervalRef = useRef(null);
   const questionStartTimeRef = useRef(Date.now());
@@ -36,6 +42,7 @@ export default function AssessmentRoom() {
       const res = await assessmentAPI.getCurrentQuestion(assessmentId);
 
       if (res.data.completed) {
+        isCompletedRef.current = true;
         navigate(`/test/${assessmentId}/completed`);
         return;
       }
@@ -52,34 +59,148 @@ export default function AssessmentRoom() {
       setIsSubmitting(false);
     } catch (err) {
       console.error('Failed to load assessment:', err);
-      // Auto-retry silently up to 3 times before displaying notice
+      // Auto-retry silently up to 3 times
       if (retryCount < 3) {
         setTimeout(() => {
           fetchCurrentState(retryCount + 1);
         }, 600);
         return;
       }
-      setError(err.response?.data?.error || 'Failed to connect to assessment server. Please check your connection.');
+      setError(err.response?.data?.error || 'Failed to connect to assessment server. Reconnecting...');
     } finally {
       setLoading(false);
     }
   };
 
+  // Anti-Back Navigation and Keystroke Protections
   useEffect(() => {
-    fetchCurrentState();
+    // Lock browser history so back button cannot leave the assessment
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', handlePopState);
+
+    // Disable Right-Click Context Menu
+    const handleContextMenu = (e) => e.preventDefault();
+    window.addEventListener('contextmenu', handleContextMenu);
+
+    // Disable Copy, Cut, Paste
+    const handleCopy = (e) => e.preventDefault();
+    window.addEventListener('copy', handleCopy);
+    window.addEventListener('cut', handleCopy);
+    window.addEventListener('paste', handleCopy);
+
+    // Disable Developer Tools and Back Keystrokes
+    const handleKeyDown = (e) => {
+      // F12 or Ctrl+Shift+I/J/C or Ctrl+U
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) ||
+        (e.ctrlKey && (e.key === 'u' || e.key === 'U'))
+      ) {
+        e.preventDefault();
+        return false;
+      }
+      // Alt+ArrowLeft (browser back) or Backspace outside text input
+      if (
+        (e.altKey && e.key === 'ArrowLeft') ||
+        (e.key === 'Backspace' && !['INPUT', 'TEXTAREA'].includes(e.target?.tagName))
+      ) {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+C / Ctrl+V / Ctrl+A / Ctrl+X
+      if (e.ctrlKey && ['c', 'C', 'v', 'V', 'a', 'A', 'x', 'X'].includes(e.key)) {
+        e.preventDefault();
+        return false;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
 
     const handleBeforeUnload = (e) => {
-      e.preventDefault();
-      e.returnValue = 'Assessment in progress. Leaving this page will submit your test automatically.';
-      return e.returnValue;
+      if (!isCompletedRef.current) {
+        e.preventDefault();
+        e.returnValue = 'Assessment in progress. Leaving this page will submit your test automatically.';
+        return e.returnValue;
+      }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('copy', handleCopy);
+      window.removeEventListener('cut', handleCopy);
+      window.removeEventListener('paste', handleCopy);
+      window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  // Initial Data Load
+  useEffect(() => {
+    fetchCurrentState();
+    return () => {
       if (questionIntervalRef.current) clearInterval(questionIntervalRef.current);
     };
   }, [assessmentId]);
+
+  // Tab-Switching and Window Blur Detection
+  useEffect(() => {
+    const handleTabViolation = async () => {
+      const now = Date.now();
+      // Debounce events occurring within 2 seconds
+      if (now - lastViolationTimeRef.current < 2000) return;
+      lastViolationTimeRef.current = now;
+
+      if (isCompletedRef.current || isTerminated) return;
+
+      const nextCount = tabSwitchCount + 1;
+      setTabSwitchCount(nextCount);
+
+      if (nextCount === 1) {
+        // Strike 1 Warning
+        setShowStrikeModal(true);
+        try {
+          await assessmentAPI.recordViolation(assessmentId, { type: 'TAB_SWITCH', autoTerminate: false });
+        } catch (err) {
+          console.warn('Violation record error:', err);
+        }
+      } else {
+        // Strike 2 - Auto Terminate!
+        setIsTerminated(true);
+        setShowStrikeModal(false);
+        try {
+          await assessmentAPI.recordViolation(assessmentId, { type: 'TAB_SWITCH', autoTerminate: true });
+        } catch (err) {
+          console.warn('Violation terminate error:', err);
+        }
+        setTimeout(() => {
+          isCompletedRef.current = true;
+          navigate(`/test/${assessmentId}/completed`);
+        }, 3000);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleTabViolation();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      handleTabViolation();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [assessmentId, tabSwitchCount, isTerminated]);
 
   // Auto-reconnect if notice ever appears
   useEffect(() => {
@@ -91,9 +212,9 @@ export default function AssessmentRoom() {
     return () => clearTimeout(timer);
   }, [error]);
 
-  // Synchronized 28-30s Per-Question Timer
+  // Synchronized 10s Per-Question Timer
   useEffect(() => {
-    if (!question || loading) return;
+    if (!question || loading || isTerminated) return;
 
     questionStartTimeRef.current = Date.now();
     isAutoAdvancingRef.current = false;
@@ -107,12 +228,12 @@ export default function AssessmentRoom() {
       const ratio = Math.max(0, (QUESTION_TOTAL_DURATION - elapsedSec) / QUESTION_TOTAL_DURATION);
       setTimerRatio(ratio);
 
-      // Warning when approaching the end (at 26-28s mark)
-      if (elapsedSec >= 26) {
+      // Warning when approaching the end (at 8s mark)
+      if (elapsedSec >= 8) {
         setAutoAdvanceAlert(true);
       }
 
-      // Hard auto-advance at 30 seconds
+      // Hard auto-advance at 10 seconds
       if (elapsedSec >= QUESTION_TOTAL_DURATION) {
         clearInterval(questionIntervalRef.current);
         if (!isAutoAdvancingRef.current) {
@@ -125,11 +246,11 @@ export default function AssessmentRoom() {
     return () => {
       if (questionIntervalRef.current) clearInterval(questionIntervalRef.current);
     };
-  }, [question?.id, loading]);
+  }, [question?.id, loading, isTerminated]);
 
-  // Automatically submit and advance when question 30s limit expires
+  // Automatically submit and advance when question 10s limit expires
   const triggerAutoAdvance = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || isTerminated) return;
     setIsSubmitting(true);
 
     const fallbackChoice = selectedOption || 'TIMEOUT';
@@ -137,6 +258,7 @@ export default function AssessmentRoom() {
       const res = await assessmentAPI.submitAnswer(assessmentId, question.id, fallbackChoice);
 
       if (res.data.completed) {
+        isCompletedRef.current = true;
         navigate(`/test/${assessmentId}/completed`);
       } else {
         await fetchCurrentState();
@@ -144,9 +266,10 @@ export default function AssessmentRoom() {
     } catch (err) {
       console.warn('Auto-advance submission error, retrying:', err);
       try {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 400));
         const res2 = await assessmentAPI.submitAnswer(assessmentId, question.id, fallbackChoice);
         if (res2.data.completed) {
+          isCompletedRef.current = true;
           navigate(`/test/${assessmentId}/completed`);
         } else {
           await fetchCurrentState();
@@ -159,7 +282,7 @@ export default function AssessmentRoom() {
 
   // Immediate option selection by candidate
   const handleOptionSelect = async (optionLabel) => {
-    if (isSubmitting || selectedOption !== null) return;
+    if (isSubmitting || selectedOption !== null || isTerminated) return;
 
     if (questionIntervalRef.current) clearInterval(questionIntervalRef.current);
     setSelectedOption(optionLabel);
@@ -169,20 +292,22 @@ export default function AssessmentRoom() {
       const res = await assessmentAPI.submitAnswer(assessmentId, question.id, optionLabel);
 
       if (res.data.completed) {
+        isCompletedRef.current = true;
         setTimeout(() => {
           navigate(`/test/${assessmentId}/completed`);
-        }, 200);
+        }, 150);
       } else {
         setTimeout(async () => {
           await fetchCurrentState();
-        }, 200);
+        }, 150);
       }
     } catch (err) {
       console.error('Failed to submit answer, retrying:', err);
       try {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 400));
         const res2 = await assessmentAPI.submitAnswer(assessmentId, question.id, optionLabel);
         if (res2.data.completed) {
+          isCompletedRef.current = true;
           navigate(`/test/${assessmentId}/completed`);
         } else {
           await fetchCurrentState();
@@ -194,6 +319,28 @@ export default function AssessmentRoom() {
   };
 
   const progressPercentage = Math.round((currentQuestionNumber / totalQuestions) * 100);
+
+  // Terminated screen for repeated malpractice
+  if (isTerminated) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-[#14221B] rounded-3xl border-2 border-rose-500 p-7 shadow-2xl text-center">
+          <div className="w-16 h-16 rounded-2xl bg-rose-950/60 flex items-center justify-center mx-auto mb-4 border border-rose-900">
+            <ShieldAlert className="w-9 h-9 text-rose-500" />
+          </div>
+          <h2 className="text-xl font-black text-white mb-2">Test Auto-Terminated</h2>
+          <p className="text-xs font-bold text-rose-400 uppercase tracking-wide mb-3">
+            Malpractice / Repeated Tab Switching Detected
+          </p>
+          <p className="text-xs text-gray-300 mb-6 leading-relaxed">
+            You navigated away from the assessment window multiple times. According to our security and proctoring policy, your assessment has been automatically locked, scored, and submitted.
+          </p>
+          <div className="w-7 h-7 border-3 border-rose-500/30 border-t-rose-500 rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-xs text-gray-400">Redirecting to submission confirmation...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && !question) {
     return (
@@ -228,6 +375,36 @@ export default function AssessmentRoom() {
 
   return (
     <div className="min-h-screen bg-[#F8FAF9] dark:bg-[#0C1410] text-[#212529] dark:text-gray-100 flex flex-col select-none transition-colors duration-200">
+      {/* Strike 1 Warning Modal */}
+      {showStrikeModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white dark:bg-[#14221B] rounded-3xl border-2 border-amber-500 p-6 sm:p-8 shadow-2xl text-center">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center mx-auto mb-4 border border-amber-200 dark:border-amber-900">
+              <AlertTriangle className="w-9 h-9 text-amber-500 animate-bounce" />
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 text-xs font-black uppercase tracking-wider mb-3">
+              <span>Security Warning • Strike 1 of 2</span>
+            </div>
+            <h2 className="text-lg font-black text-gray-900 dark:text-white mb-2">
+              Tab Switching Is Strictly Prohibited!
+            </h2>
+            <p className="text-xs text-gray-600 dark:text-gray-300 mb-5 leading-relaxed">
+              You navigated away from the assessment window. Leaving this tab, minimizing the browser, or opening any other application is strictly monitored.
+              <br /><br />
+              <strong className="text-rose-600 dark:text-rose-400 font-bold">
+                FINAL WARNING: If you switch tabs one more time, your test will be immediately auto-submitted and permanently terminated!
+              </strong>
+            </p>
+            <button
+              onClick={() => setShowStrikeModal(false)}
+              className="w-full py-3 px-5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-sm font-bold shadow-soft transition-all duration-200 active:scale-[0.98]"
+            >
+              I Understand & Resume Test
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Sticky Header */}
       <header className="sticky top-0 z-30 bg-white/90 dark:bg-[#14221B]/90 backdrop-blur-md border-b border-gray-200/80 dark:border-[#284033] shadow-xs">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
@@ -237,6 +414,9 @@ export default function AssessmentRoom() {
               <h1 className="text-base sm:text-lg font-extrabold text-[#146C43] dark:text-emerald-400 tracking-tight">
                 Round 1 – Online Assessment
               </h1>
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                <ShieldCheck className="w-3 h-3" /> Proctored
+              </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:flex items-center gap-1.5 mt-0.5">
               <span>Candidate: <strong className="text-gray-700 dark:text-gray-200">{candidateName}</strong></span>
@@ -249,7 +429,7 @@ export default function AssessmentRoom() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Live Per-Question Timer (No seconds exposed to candidate) */}
+            {/* Live 10s Visual Fuel Timer Track */}
             <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-gray-200 dark:border-[#284033] bg-white dark:bg-[#14221B] shadow-xs">
               <div className="flex items-center gap-1.5 text-xs font-bold">
                 <Clock className={`w-3.5 h-3.5 transition-colors ${
@@ -259,11 +439,10 @@ export default function AssessmentRoom() {
                     ? 'text-amber-500'
                     : 'text-rose-500 animate-spin'
                 }`} />
-                <span className="text-gray-600 dark:text-gray-300">
-                  {timerRatio <= 0.15 ? 'Moving soon...' : 'Timer'}
+                <span className="text-gray-600 dark:text-gray-300 text-xs">
+                  {timerRatio <= 0.2 ? 'Moving soon...' : 'Timer'}
                 </span>
               </div>
-              {/* Visual Countdown Fuel Track - NO SECONDS SHOWN */}
               <div className="w-24 sm:w-36 h-2.5 bg-gray-100 dark:bg-[#1E3326] rounded-full overflow-hidden p-0.5 border border-gray-200/70 dark:border-[#294534]">
                 <div
                   className={`h-full rounded-full transition-all duration-100 ease-linear ${
@@ -309,12 +488,10 @@ export default function AssessmentRoom() {
             />
           </div>
 
-          {/* Section & Question Progress Header */}
+          {/* Section & Question Progress Header (NO TOPIC HINT DISPLAYED) */}
           <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-gray-100 dark:border-gray-800/80">
             <div className="inline-flex items-center gap-2 bg-[#EAF7EF] dark:bg-[#1D3327] text-[#146C43] dark:text-emerald-300 px-3.5 py-1 rounded-xl text-xs font-bold tracking-wide border border-[#C8E8D5] dark:border-[#294337]">
               <span>{question?.section || 'Assessment'}</span>
-              <span className="text-[#52B482]">•</span>
-              <span className="text-gray-600 dark:text-gray-300 font-medium">{question?.topic}</span>
             </div>
 
             {/* Question Counter */}
@@ -334,7 +511,7 @@ export default function AssessmentRoom() {
           <div className="mb-6 flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50/80 dark:bg-[#1B2B23]/60 px-3.5 py-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-[#198754] dark:text-emerald-400 flex-shrink-0" />
-              <span>Select an option to advance immediately. If not selected, the test automatically moves to the next question.</span>
+              <span>Select an option immediately. Question auto-moves in 10 seconds. Tab switching is strictly prohibited.</span>
             </div>
             {autoAdvanceAlert && (
               <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 animate-pulse flex-shrink-0">
@@ -343,66 +520,52 @@ export default function AssessmentRoom() {
             )}
           </div>
 
-
           {/* 4 Interactive Option Cards */}
           <div className="space-y-3">
             {question?.options.map((opt) => {
               const isSelected = selectedOption === opt.label;
+
               return (
                 <button
                   key={opt.label}
-                  type="button"
                   onClick={() => handleOptionSelect(opt.label)}
-                  disabled={isSubmitting}
-                  className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-start gap-3.5 group relative ${
+                  disabled={isSubmitting || selectedOption !== null}
+                  className={`w-full p-4 sm:p-4.5 rounded-2xl border text-left transition-all duration-150 flex items-center justify-between gap-4 group ${
                     isSelected
-                      ? 'border-[#198754] bg-[#EAF7EF] dark:bg-[#1D3327] text-[#146C43] dark:text-emerald-300 shadow-sm scale-[1.005]'
-                      : isSubmitting
-                      ? 'border-gray-100 dark:border-gray-800/80 bg-gray-50/50 dark:bg-[#14221B] text-gray-400 cursor-not-allowed'
-                      : 'border-gray-200/90 dark:border-[#284033] hover:border-[#198754]/70 hover:bg-gray-50/70 dark:hover:bg-[#1B2B23] bg-white dark:bg-[#14221B] text-gray-800 dark:text-gray-200 active:scale-[0.99] hover:shadow-xs'
-                  }`}
+                      ? 'bg-[#198754] border-[#198754] text-white shadow-soft dark:shadow-none'
+                      : 'bg-[#FDFDFD] dark:bg-[#17271F] border-gray-200 dark:border-[#284033] hover:border-[#198754]/50 dark:hover:border-emerald-500/50 hover:bg-gray-50/80 dark:hover:bg-[#1B2F25] active:scale-[0.99]'
+                  } ${isSubmitting ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
                 >
-                  {/* Option Badge */}
-                  <div
-                    className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-extrabold transition-all flex-shrink-0 mt-0.5 ${
-                      isSelected
-                        ? 'bg-[#198754] text-white shadow-xs'
-                        : 'bg-gray-100 dark:bg-[#20362B] text-gray-700 dark:text-gray-300 group-hover:bg-[#EAF7EF] dark:group-hover:bg-[#2A473B] group-hover:text-[#146C43] dark:group-hover:text-emerald-300'
-                    }`}
-                  >
-                    {opt.label}
+                  <div className="flex items-center gap-3.5">
+                    <span
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center font-bold text-xs sm:text-sm transition-colors ${
+                        isSelected
+                          ? 'bg-white text-[#198754] shadow-xs'
+                          : 'bg-gray-100 dark:bg-[#20362B] text-gray-700 dark:text-gray-200 group-hover:bg-[#EAF7EF] dark:group-hover:bg-[#274436] group-hover:text-[#146C43] dark:group-hover:text-emerald-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </span>
+                    <span className={`text-sm sm:text-base font-medium leading-relaxed ${
+                      isSelected ? 'text-white' : 'text-gray-800 dark:text-gray-200'
+                    }`}>
+                      {opt.text}
+                    </span>
                   </div>
 
-                  {/* Option Text */}
-                  <div className="flex-1 text-sm leading-snug font-medium pt-0.5">
-                    {opt.text}
+                  <div className="flex-shrink-0">
+                    {isSelected ? (
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full border border-gray-300 dark:border-gray-600 group-hover:border-[#198754] dark:group-hover:border-emerald-400 transition-colors" />
+                    )}
                   </div>
-
-                  {isSelected && (
-                    <div className="text-[#198754] dark:text-emerald-400 mt-0.5 flex-shrink-0 animate-in zoom-in-75">
-                      <CheckCircle className="w-5 h-5" />
-                    </div>
-                  )}
                 </button>
               );
             })}
           </div>
-
-          {/* Instant Saving Indicator */}
-          {isSubmitting && (
-            <div className="mt-4 text-center text-xs font-semibold text-[#198754] dark:text-emerald-400 flex items-center justify-center gap-2 animate-in fade-in">
-              <div className="w-3.5 h-3.5 border-2 border-[#198754]/30 border-t-[#198754] rounded-full animate-spin" />
-              <span>Saving answer and loading next question...</span>
-            </div>
-          )}
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="py-3 px-4 text-center text-xs text-gray-400 dark:text-gray-600 border-t border-gray-200/50 dark:border-gray-800 bg-white dark:bg-[#14221B]">
-        Round 1 Assessment • 28s Per Question • {interestedProfile ? `${interestedProfile} Track` : 'Questions randomized per candidate'}
-      </footer>
-
     </div>
   );
 }

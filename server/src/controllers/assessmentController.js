@@ -194,7 +194,6 @@ export async function getCurrentQuestion(req, res) {
       question: {
         id: question.id,
         section: question.section,
-        topic: question.topic,
         questionText: question.question_text,
         options: [
           { label: 'A', text: question.option_a },
@@ -378,5 +377,62 @@ export async function getAssessmentStatus(req, res) {
   } catch (error) {
     console.error('Error fetching assessment status:', error);
     return res.status(500).json({ error: 'Failed to retrieve assessment status.' });
+  }
+}
+
+export async function recordViolation(req, res) {
+  try {
+    const { assessmentId } = req.params;
+    const { type, autoTerminate } = req.body;
+
+    const assessment = await db.get('SELECT * FROM assessments WHERE id = ?', [assessmentId]);
+    if (!assessment) {
+      return res.status(404).json({ error: 'Assessment not found.' });
+    }
+
+    if (assessment.status === 'COMPLETED' || assessment.status === 'TIMED_OUT') {
+      return res.json({
+        terminated: true,
+        alreadyCompleted: true,
+        tabSwitchCount: assessment.tab_switch_count || 0
+      });
+    }
+
+    const currentViolations = (assessment.tab_switch_count || 0) + 1;
+
+    // Auto-terminate on 2nd violation or explicit autoTerminate flag
+    if (autoTerminate || currentViolations >= 2) {
+      const scoreRow = await db.get('SELECT COUNT(*) as count FROM answers WHERE assessment_id = ? AND is_correct = 1', [assessmentId]);
+      const currentScore = parseInt(scoreRow?.count || 0, 10);
+      const submissionTime = new Date().toISOString();
+
+      await db.run(`
+        UPDATE assessments 
+        SET tab_switch_count = ?, 
+            status = 'COMPLETED', 
+            completion_reason = 'Terminated: Tab Switching / Malpractice Detected', 
+            submission_time = ?,
+            score = ?
+        WHERE id = ?
+      `, [currentViolations, submissionTime, currentScore, assessmentId]);
+
+      return res.json({
+        terminated: true,
+        tabSwitchCount: currentViolations,
+        message: 'Assessment auto-terminated due to tab switching / malpractice.'
+      });
+    }
+
+    // Strike 1 - Record warning count in database
+    await db.run('UPDATE assessments SET tab_switch_count = ? WHERE id = ?', [currentViolations, assessmentId]);
+
+    return res.json({
+      terminated: false,
+      tabSwitchCount: currentViolations,
+      message: 'Violation recorded.'
+    });
+  } catch (error) {
+    console.error('Error recording violation:', error);
+    return res.status(500).json({ error: 'Failed to record violation.' });
   }
 }

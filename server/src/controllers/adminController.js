@@ -116,7 +116,8 @@ export async function getCandidates(req, res) {
         a.total_questions as "totalQuestions",
         a.start_time as "startTime",
         a.submission_time as "submissionTime",
-        a.completion_reason as "completionReason"
+        a.completion_reason as "completionReason",
+        COALESCE(a.tab_switch_count, 0) as "tabSwitchCount"
       FROM candidates c
       LEFT JOIN assessments a ON c.id = a.candidate_id
       WHERE 1=1
@@ -202,7 +203,8 @@ export async function getCandidateDetails(req, res) {
         a.start_time as "startTime",
         a.deadline,
         a.submission_time as "submissionTime",
-        a.completion_reason as "completionReason"
+        a.completion_reason as "completionReason",
+        COALESCE(a.tab_switch_count, 0) as "tabSwitchCount"
       FROM candidates c
       LEFT JOIN assessments a ON c.id = a.candidate_id
       WHERE c.id = ? OR a.id = ?
@@ -293,6 +295,7 @@ export async function exportCSV(req, res) {
         a.score as "Score",
         a.total_questions as "Total_Questions",
         ROUND((a.score * 100.0 / a.total_questions), 1) as "Percentage",
+        COALESCE(a.tab_switch_count, 0) as "Tab_Switches",
         a.start_time as "Start_Time",
         a.submission_time as "Submission_Time",
         a.completion_reason as "Completion_Reason"
