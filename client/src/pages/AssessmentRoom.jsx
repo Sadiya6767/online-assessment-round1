@@ -16,8 +16,8 @@ export default function AssessmentRoom() {
   const [question, setQuestion] = useState(null);
   const [interestedProfile, setInterestedProfile] = useState(localStorage.getItem('nexis_interested_profile') || '');
 
-  // Strictly 10 seconds per question
-  const QUESTION_TOTAL_DURATION = 10;
+  // Strictly 12 seconds per question
+  const QUESTION_TOTAL_DURATION = 12;
   const [timerRatio, setTimerRatio] = useState(1.0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -212,7 +212,7 @@ export default function AssessmentRoom() {
     return () => clearTimeout(timer);
   }, [error]);
 
-  // Synchronized 10s Per-Question Timer
+  // Synchronized 12s Per-Question Timer
   useEffect(() => {
     if (!question || loading || isTerminated) return;
 
@@ -228,12 +228,12 @@ export default function AssessmentRoom() {
       const ratio = Math.max(0, (QUESTION_TOTAL_DURATION - elapsedSec) / QUESTION_TOTAL_DURATION);
       setTimerRatio(ratio);
 
-      // Warning when approaching the end (at 8s mark)
-      if (elapsedSec >= 8) {
+      // Warning when approaching the end (at 9.5s mark)
+      if (elapsedSec >= 9.5) {
         setAutoAdvanceAlert(true);
       }
 
-      // Hard auto-advance at 10 seconds
+      // Hard auto-advance at 12 seconds
       if (elapsedSec >= QUESTION_TOTAL_DURATION) {
         clearInterval(questionIntervalRef.current);
         if (!isAutoAdvancingRef.current) {
@@ -248,7 +248,7 @@ export default function AssessmentRoom() {
     };
   }, [question?.id, loading, isTerminated]);
 
-  // Automatically submit and advance when question 10s limit expires
+  // Automatically submit and advance when question 12s limit expires
   const triggerAutoAdvance = async () => {
     if (isSubmitting || isTerminated) return;
     setIsSubmitting(true);
@@ -429,7 +429,7 @@ export default function AssessmentRoom() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Live 10s Visual Fuel Timer Track */}
+            {/* Live 12s Visual Fuel Timer Track */}
             <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-gray-200 dark:border-[#284033] bg-white dark:bg-[#14221B] shadow-xs">
               <div className="flex items-center gap-1.5 text-xs font-bold">
                 <Clock className={`w-3.5 h-3.5 transition-colors ${
@@ -511,7 +511,7 @@ export default function AssessmentRoom() {
           <div className="mb-6 flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50/80 dark:bg-[#1B2B23]/60 px-3.5 py-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-[#198754] dark:text-emerald-400 flex-shrink-0" />
-              <span>Select an option immediately. Question auto-moves in 10 seconds. Tab switching is strictly prohibited.</span>
+              <span>Select an option immediately. Question auto-moves in 12 seconds. Tab switching is strictly prohibited.</span>
             </div>
             {autoAdvanceAlert && (
               <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 animate-pulse flex-shrink-0">

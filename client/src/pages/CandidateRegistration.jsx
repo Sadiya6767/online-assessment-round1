@@ -277,7 +277,7 @@ export default function CandidateRegistration() {
           <ul className="mt-4 space-y-2.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
-              <span>This assessment contains <strong>50 questions</strong> (Web Development + Reasoning common modules, plus questions tailored to your chosen specialization). Each question has a <strong>28-second timer</strong> and automatically advances at <strong>30 seconds</strong>.</span>
+              <span>This assessment contains <strong>50 questions</strong> (Web Development + Reasoning common modules, plus questions tailored to your chosen specialization). Each question automatically advances in <strong>12 seconds</strong>.</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
@@ -290,6 +290,10 @@ export default function CandidateRegistration() {
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
               <span><strong>Back navigation is disabled</strong>, and answers cannot be altered once selected.</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 flex-shrink-0" />
+              <span className="text-rose-600 dark:text-rose-400 font-medium"><strong>Tab switching or leaving this window is strictly prohibited.</strong> First violation triggers a warning strike; a second violation will automatically terminate your test.</span>
             </li>
             <li className="flex items-start gap-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#198754] mt-2 flex-shrink-0" />
