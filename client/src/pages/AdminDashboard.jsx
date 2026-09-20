@@ -23,7 +23,8 @@ import {
   BarChart3,
   Timer,
   Sparkles,
-  Briefcase
+  Briefcase,
+  AlertTriangle
 } from 'lucide-react';
 import { adminAPI } from '../services/api';
 import ThemeToggle from '../components/ThemeToggle';

@@ -166,10 +166,20 @@ export async function getCandidates(req, res) {
     const candidates = await db.all(query, params);
 
     return res.json({
-      candidates: candidates.map(c => ({
-        ...c,
-        percentage: c.totalQuestions && c.score !== null ? Math.round((c.score / c.totalQuestions) * 100) : null
-      }))
+      candidates: candidates.map(c => {
+        let durationUsed = '-';
+        if (c.startTime && c.submissionTime) {
+          const diffSec = Math.max(0, Math.round((new Date(c.submissionTime).getTime() - new Date(c.startTime).getTime()) / 1000));
+          const mins = Math.floor(diffSec / 60);
+          const secs = diffSec % 60;
+          durationUsed = `${mins}m ${secs}s`;
+        }
+        return {
+          ...c,
+          durationUsed,
+          percentage: c.totalQuestions && c.score !== null ? Math.round((c.score / c.totalQuestions) * 100) : null
+        };
+      })
     });
   } catch (error) {
     console.error('Error fetching candidates:', error);
