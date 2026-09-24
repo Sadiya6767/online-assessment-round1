@@ -1,11 +1,11 @@
 import axios from 'axios';
 
 const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
-const API_BASE_URL = rawApiUrl ? `${rawApiUrl}/api` : '/api';
+const API_BASE_URL = rawApiUrl ? `${rawApiUrl}/api` : 'https://online-assessment-round1.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 90000,
 });
 
 // Request interceptor to automatically attach JWT for admin endpoints

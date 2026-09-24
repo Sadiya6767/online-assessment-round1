@@ -99,33 +99,6 @@ export async function registerCandidate(req, res) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check if candidate already registered with completed or in-progress test
-    const existingCandidate = await db.get('SELECT id, interested_profile FROM candidates WHERE email = ?', [normalizedEmail]);
-    if (existingCandidate) {
-      const existingAssessment = await db.get('SELECT id, status FROM assessments WHERE candidate_id = ?', [existingCandidate.id]);
-      if (existingAssessment) {
-        if (existingAssessment.status === 'COMPLETED' || existingAssessment.status === 'TIMED_OUT') {
-          return res.status(400).json({
-            error: 'This email address has already completed or submitted the Round 1 assessment. Multiple attempts are not permitted.'
-          });
-        } else if (existingAssessment.status === 'IN_PROGRESS') {
-          // Allow candidate to resume their ongoing session
-          return res.json({
-            message: 'Resuming active assessment session.',
-            candidateId: existingCandidate.id,
-            assessmentId: existingAssessment.id,
-            interestedProfile: existingCandidate.interested_profile,
-            isResuming: true
-          });
-        }
-      }
-    }
-
-    // Generate clean unique IDs
-    const randomHex = crypto.randomBytes(3).toString('hex').toUpperCase();
-    const candidateId = `CAN-${Date.now().toString(36).toUpperCase()}-${randomHex}`;
-    const assessmentId = `ASM-${Date.now().toString(36).toUpperCase()}-${randomHex}`;
-
     // Select questions: 40 Common (Web Dev + Aptitude) + 10 Profile Specific
     const targetProfileCode = VALID_PROFILES[chosenProfile];
     const eligibleQuestions = await db.all(`
@@ -136,6 +109,123 @@ export async function registerCandidate(req, res) {
 
     const questionIds = eligibleQuestions.map(q => q.id);
     const randomizedSequence = shuffleArray(questionIds);
+
+    // Check if candidate already registered with this email
+    const existingCandidate = await db.get(
+      'SELECT id, full_name, interested_profile FROM candidates WHERE email = ?',
+      [normalizedEmail]
+    );
+
+    if (existingCandidate) {
+      // Update candidate details with latest submission info
+      await db.run(`
+        UPDATE candidates SET
+          full_name = ?,
+          interested_profile = ?,
+          degree = ?,
+          semester = ?,
+          year = ?,
+          branch = ?,
+          college_name = ?,
+          graduation_year = ?,
+          phone = ?,
+          resume_file_path = ?
+        WHERE id = ?
+      `, [
+        fullName.trim(),
+        chosenProfile,
+        degree.trim(),
+        semester.trim(),
+        year.trim(),
+        branch.trim(),
+        collegeName.trim(),
+        graduationYear.trim(),
+        phoneClean,
+        file.filename,
+        existingCandidate.id
+      ]);
+
+      const existingAssessment = await db.get(
+        'SELECT id, status FROM assessments WHERE candidate_id = ? ORDER BY created_at DESC LIMIT 1',
+        [existingCandidate.id]
+      );
+
+      if (existingAssessment) {
+        if (existingAssessment.status === 'IN_PROGRESS') {
+          // Allow candidate to resume active session
+          return res.json({
+            message: 'Resuming active assessment session.',
+            candidateId: existingCandidate.id,
+            assessmentId: existingAssessment.id,
+            candidateName: fullName.trim(),
+            interestedProfile: chosenProfile,
+            isResuming: true
+          });
+        }
+
+        // If NOT_STARTED, or if re-taking the test, reset assessment state cleanly
+        await db.run('DELETE FROM answers WHERE assessment_id = ?', [existingAssessment.id]);
+        await db.run(`
+          UPDATE assessments SET
+            assessment_name = ?,
+            status = 'NOT_STARTED',
+            start_time = NULL,
+            deadline = NULL,
+            submission_time = NULL,
+            current_question_index = 0,
+            question_sequence = ?,
+            total_questions = ?,
+            score = 0,
+            tab_switch_count = 0,
+            completion_reason = NULL,
+            created_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `, [
+          `Round 1 – ${chosenProfile}`,
+          JSON.stringify(randomizedSequence),
+          randomizedSequence.length,
+          existingAssessment.id
+        ]);
+
+        return res.status(200).json({
+          message: 'Registration successful. Ready to begin assessment.',
+          candidateId: existingCandidate.id,
+          assessmentId: existingAssessment.id,
+          candidateName: fullName.trim(),
+          interestedProfile: chosenProfile
+        });
+      } else {
+        // Candidate profile existed without an assessment: create one
+        const randomHex = crypto.randomBytes(3).toString('hex').toUpperCase();
+        const assessmentId = `ASM-${Date.now().toString(36).toUpperCase()}-${randomHex}`;
+
+        await db.run(`
+          INSERT INTO assessments (
+            id, candidate_id, assessment_name, status, question_sequence, total_questions
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+          assessmentId,
+          existingCandidate.id,
+          `Round 1 – ${chosenProfile}`,
+          'NOT_STARTED',
+          JSON.stringify(randomizedSequence),
+          randomizedSequence.length
+        ]);
+
+        return res.status(201).json({
+          message: 'Registration successful',
+          candidateId: existingCandidate.id,
+          assessmentId,
+          candidateName: fullName.trim(),
+          interestedProfile: chosenProfile
+        });
+      }
+    }
+
+    // New candidate: generate clean unique IDs
+    const randomHex = crypto.randomBytes(3).toString('hex').toUpperCase();
+    const candidateId = `CAN-${Date.now().toString(36).toUpperCase()}-${randomHex}`;
+    const assessmentId = `ASM-${Date.now().toString(36).toUpperCase()}-${randomHex}`;
 
     // Insert Candidate
     await db.run(`
