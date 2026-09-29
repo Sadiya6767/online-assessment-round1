@@ -7,7 +7,8 @@ import {
   downloadResume,
   exportCSV,
   deleteCandidate,
-  triggerRetentionPurge
+  triggerRetentionPurge,
+  deleteAllCandidates
 } from '../controllers/adminController.js';
 import { authenticateAdmin } from '../middleware/auth.js';
 
@@ -24,6 +25,7 @@ router.get('/candidates', getCandidates);
 router.get('/candidate/:id', getCandidateDetails);
 router.get('/resume/:filename', downloadResume);
 router.get('/export-csv', exportCSV);
+router.delete('/candidates/all', deleteAllCandidates);
 router.delete('/candidate/:id', deleteCandidate);
 router.post('/purge-expired', triggerRetentionPurge);
 

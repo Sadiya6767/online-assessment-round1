@@ -9,6 +9,7 @@ import { purgeExpiredRecords } from '../services/cleanupService.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDir = path.join(__dirname, '..', '..', 'uploads');
+const backupDir = path.join(__dirname, '..', '..', 'backup');
 
 export async function adminLogin(req, res) {
   try {
@@ -365,5 +366,76 @@ export async function deleteCandidate(req, res) {
   } catch (error) {
     console.error('Delete candidate error:', error);
     return res.status(500).json({ error: 'Failed to delete candidate.' });
+  }
+}
+
+export async function deleteAllCandidates(req, res) {
+  const client = await db.getClient();
+  try {
+    // 1. Fetch all candidate records, assessments, and answers for safety backup
+    const candidates = await db.all('SELECT * FROM candidates');
+    const assessments = await db.all('SELECT * FROM assessments');
+    const answers = await db.all('SELECT * FROM answers');
+
+    if (candidates.length === 0) {
+      return res.json({
+        message: 'No candidate records found in database to delete.',
+        deletedCount: 0
+      });
+    }
+
+    // 2. Create automated JSON safety backup before deletion
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const backupFileName = `backup_before_bulk_delete_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    const backupFilePath = path.join(backupDir, backupFileName);
+    fs.writeFileSync(backupFilePath, JSON.stringify({
+      backupDate: new Date().toISOString(),
+      candidateCount: candidates.length,
+      assessmentCount: assessments.length,
+      answerCount: answers.length,
+      candidates,
+      assessments,
+      answers
+    }, null, 2));
+
+    // 3. Remove uploaded resume files from disk
+    let deletedFiles = 0;
+    for (const cand of candidates) {
+      if (cand.resume_file_path) {
+        const filePath = path.join(uploadDir, path.basename(cand.resume_file_path));
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+            deletedFiles++;
+          } catch (e) {
+            console.warn(`Could not delete resume file for ${cand.id}:`, e.message);
+          }
+        }
+      }
+    }
+
+    // 4. Perform atomic deletion in database transaction
+    await client.query('BEGIN');
+    await client.query('DELETE FROM answers');
+    await client.query('DELETE FROM assessments');
+    const deleteResult = await client.query('DELETE FROM candidates');
+    await client.query('COMMIT');
+
+    console.log(`[Admin Bulk Delete] Deleted ${candidates.length} candidates (${deleteResult.rowCount} rows), ${deletedFiles} resume files. Backup saved: ${backupFileName}`);
+
+    return res.json({
+      message: `Successfully deleted all ${candidates.length} candidates and their assessment records.`,
+      deletedCount: candidates.length,
+      deletedFiles,
+      backupFile: backupFileName
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error in deleteAllCandidates:', error);
+    return res.status(500).json({ error: 'Failed to delete all candidates: ' + error.message });
+  } finally {
+    client.release();
   }
 }

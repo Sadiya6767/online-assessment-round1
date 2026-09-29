@@ -58,6 +58,7 @@ export const adminAPI = {
   getResumeUrl: (filename) => `${API_BASE_URL}/admin/resume/${encodeURIComponent(filename)}`,
   exportCSV: () => api.get('/admin/export-csv', { responseType: 'blob' }),
   deleteCandidate: (id) => api.delete(`/admin/candidate/${id}`),
+  deleteAllCandidates: () => api.delete('/admin/candidates/all'),
   purgeExpired: () => api.post('/admin/purge-expired'),
 };
 
