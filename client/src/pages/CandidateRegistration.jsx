@@ -96,10 +96,15 @@ export default function CandidateRegistration() {
         return !value ? 'Please select your graduation year' : '';
       case 'email':
         return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? 'Enter a valid email address' : '';
-      case 'phone':
-        return !/^[6-9]\d{9}$/.test(value.replace(/\D/g, ''))
+      case 'phone': {
+        const cleaned = value ? String(value).replace(/\D/g, '') : '';
+        let norm = cleaned;
+        if (norm.length === 12 && norm.startsWith('91')) norm = norm.slice(2);
+        else if (norm.length === 11 && norm.startsWith('0')) norm = norm.slice(1);
+        return !/^[6-9]\d{9}$/.test(norm)
           ? 'Enter a valid 10-digit Indian mobile number'
           : '';
+      }
       case 'consent':
         return !value ? 'You must accept the declaration to proceed' : '';
       default:
@@ -109,7 +114,20 @@ export default function CandidateRegistration() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    const val = type === 'checkbox' ? checked : value;
+    let val = type === 'checkbox' ? checked : value;
+
+    if (name === 'phone' && typeof val === 'string') {
+      let digits = val.replace(/\D/g, '');
+      if (digits.length === 12 && digits.startsWith('91')) {
+        digits = digits.slice(2);
+      } else if (digits.length === 11 && digits.startsWith('0')) {
+        digits = digits.slice(1);
+      }
+      if (digits.length > 10) {
+        digits = digits.slice(0, 10);
+      }
+      val = digits;
+    }
 
     setFormData((prev) => ({ ...prev, [name]: val }));
 
@@ -123,22 +141,22 @@ export default function CandidateRegistration() {
     const file = e.target.files[0];
     if (!file) return;
 
-    const allowedExtensions = ['.pdf', '.doc', '.docx'];
+    const allowedExtensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
 
     if (!allowedExtensions.includes(ext)) {
       setErrors((prev) => ({
         ...prev,
-        resume: 'Invalid file format. Please upload PDF, DOC, or DOCX only.'
+        resume: 'Invalid format. Please upload PDF, DOC, DOCX, or Image (JPG, PNG).'
       }));
       setResumeFile(null);
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > 15 * 1024 * 1024) {
       setErrors((prev) => ({
         ...prev,
-        resume: 'File size exceeds 5MB limit. Please upload a smaller document.'
+        resume: 'File size exceeds 15MB limit. Please upload a smaller document.'
       }));
       setResumeFile(null);
       return;
@@ -185,9 +203,11 @@ export default function CandidateRegistration() {
       payload.append('year', formData.year);
       payload.append('branch', formData.branch.trim());
       payload.append('collegeName', formData.collegeName.trim());
-      payload.append('graduationYear', formData.graduationYear);
-      payload.append('email', formData.email.trim());
-      payload.append('phone', formData.phone.trim().replace(/\D/g, ''));
+      payload.append('email', formData.email.trim().toLowerCase());
+      let phoneClean = formData.phone.trim().replace(/\D/g, '');
+      if (phoneClean.length === 12 && phoneClean.startsWith('91')) phoneClean = phoneClean.slice(2);
+      else if (phoneClean.length === 11 && phoneClean.startsWith('0')) phoneClean = phoneClean.slice(1);
+      payload.append('phone', phoneClean);
       payload.append('consent', formData.consent ? 'true' : 'false');
       payload.append('resume', resumeFile);
 
@@ -619,7 +639,7 @@ export default function CandidateRegistration() {
                   value={formData.phone}
                   onChange={handleChange}
                   placeholder="10-digit mobile number"
-                  maxLength={10}
+                  maxLength={14}
                   className={`w-full pl-10 pr-3.5 py-2.5 bg-gray-50/70 dark:bg-[#1B2B23] border rounded-xl text-sm transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:bg-white dark:focus:bg-[#1B2B23] focus:ring-2 focus:ring-[#198754]/20 ${
                     errors.phone ? 'border-rose-400 focus:border-rose-500' : 'border-gray-200 dark:border-[#284033] focus:border-[#198754]'
                   }`}
@@ -632,7 +652,7 @@ export default function CandidateRegistration() {
           {/* Resume Upload Box */}
           <div className="pt-2">
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-1.5">
-              Upload Resume (PDF, DOC, DOCX - Max 5MB) <span className="text-rose-500">*</span>
+              Upload Resume (PDF, DOC, DOCX, or Image JPG/PNG - Max 15MB) <span className="text-rose-500">*</span>
             </label>
             <div
               className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
@@ -647,7 +667,7 @@ export default function CandidateRegistration() {
                 type="file"
                 id="resumeUpload"
                 onChange={handleFileChange}
-                accept=".pdf,.doc,.docx"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/*"
                 className="hidden"
               />
               <label htmlFor="resumeUpload" className="cursor-pointer block">

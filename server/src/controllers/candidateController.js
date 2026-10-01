@@ -79,7 +79,12 @@ export async function registerCandidate(req, res) {
     }
 
     // 10-digit Indian mobile number validation (starts with 6, 7, 8, or 9)
-    const phoneClean = phone ? phone.trim().replace(/\D/g, '') : '';
+    let phoneClean = phone ? phone.toString().trim().replace(/\D/g, '') : '';
+    if (phoneClean.length === 12 && phoneClean.startsWith('91')) {
+      phoneClean = phoneClean.slice(2);
+    } else if (phoneClean.length === 11 && phoneClean.startsWith('0')) {
+      phoneClean = phoneClean.slice(1);
+    }
     const indianPhoneRegex = /^[6-9]\d{9}$/;
     if (!phoneClean || !indianPhoneRegex.test(phoneClean)) {
       errors.phone = 'Please provide a valid 10-digit Indian mobile number (e.g. 9876543210).';
@@ -90,7 +95,7 @@ export async function registerCandidate(req, res) {
     }
 
     if (!file) {
-      errors.resume = 'Resume file is required. Please upload a PDF, DOC, or DOCX document.';
+      errors.resume = 'Resume file is required. Please upload a PDF, DOC, DOCX, or Image (JPG, PNG).';
     }
 
     if (Object.keys(errors).length > 0) {
