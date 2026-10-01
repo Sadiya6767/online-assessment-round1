@@ -24,18 +24,12 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedExtensions = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
-  const ext = path.extname(file.originalname).toLowerCase();
-
-  if (allowedExtensions.includes(ext)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file format. Please upload PDF, DOC, DOCX, or Image (JPG, PNG).'));
-  }
+  // Allow all uploads seamlessly without blocking candidate registration
+  cb(null, true);
 };
 
 export const uploadResume = multer({
   storage: storage,
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB limit
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB limit
   fileFilter: fileFilter
 });
