@@ -368,6 +368,16 @@ export default function AssessmentRoom() {
           >
             Retry Connection
           </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem('nexis_assessment_id');
+              localStorage.removeItem('nexis_candidate_id');
+              navigate('/');
+            }}
+            className="w-full mt-2.5 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-[#1B2B23] dark:hover:bg-[#20362B] text-gray-800 dark:text-gray-200 rounded-xl text-sm font-semibold transition-colors"
+          >
+            Register / Start Fresh Test
+          </button>
         </div>
       </div>
     );
