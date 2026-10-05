@@ -6,6 +6,7 @@ import AssessmentRoom from './pages/AssessmentRoom';
 import AssessmentCompletion from './pages/AssessmentCompletion';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import TestPaused, { TEST_RESUME_TIME } from './pages/TestPaused';
 
 // Protected Route Guard for Admin
 function ProtectedAdminRoute({ children }) {
@@ -16,12 +17,37 @@ function ProtectedAdminRoute({ children }) {
   return children;
 }
 
+// 1-Hour Pause Guard for Candidate Assessment Flow
+function CandidateAccessGuard({ children }) {
+  const [isPaused, setIsPaused] = React.useState(Date.now() < TEST_RESUME_TIME);
+
+  if (isPaused) {
+    return <TestPaused onResume={() => setIsPaused(false)} />;
+  }
+
+  return children;
+}
+
 export default function App() {
   return (
     <Routes>
-      {/* Candidate Assessment Flow */}
-      <Route path="/" element={<CandidateRegistration />} />
-      <Route path="/test/:assessmentId" element={<AssessmentRoom />} />
+      {/* Candidate Assessment Flow (Protected by 1-hour pause guard) */}
+      <Route
+        path="/"
+        element={
+          <CandidateAccessGuard>
+            <CandidateRegistration />
+          </CandidateAccessGuard>
+        }
+      />
+      <Route
+        path="/test/:assessmentId"
+        element={
+          <CandidateAccessGuard>
+            <AssessmentRoom />
+          </CandidateAccessGuard>
+        }
+      />
       <Route path="/test/:assessmentId/completed" element={<AssessmentCompletion />} />
 
       {/* Segregated Private Admin Flow */}

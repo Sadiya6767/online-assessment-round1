@@ -22,6 +22,7 @@ server/uploads/*
 !server/uploads/.gitkeep
 !server/data/.gitkeep
 candidate_resumes_backup/
+full_database_backup_*.json
 
 # Environment variables
 .env
