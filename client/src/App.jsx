@@ -17,9 +17,20 @@ function ProtectedAdminRoute({ children }) {
   return children;
 }
 
-// Guard for Candidate Assessment Flow (Disabled)
+// 4-Hour Test Disabled Guard (Locks until 6:20 PM IST, auto-reopens afterwards)
+const TEST_DISABLED_UNTIL = new Date('2026-10-05T12:50:00.000Z').getTime();
+
 function CandidateAccessGuard({ children }) {
-  const isTestDisabled = true;
+  const [isTestDisabled, setIsTestDisabled] = React.useState(Date.now() < TEST_DISABLED_UNTIL);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      if (Date.now() >= TEST_DISABLED_UNTIL) {
+        setIsTestDisabled(false);
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (isTestDisabled) {
     return <TestPaused />;
