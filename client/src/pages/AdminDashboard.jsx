@@ -217,54 +217,136 @@ export default function AdminDashboard() {
     }
   };
 
-  const [downloadingResume, setDownloadingResume] = useState(null);
+  const [openingResume, setOpeningResume] = useState(null);
 
-  const handleDownloadResume = async (filename, candidateName = 'Candidate') => {
+  const handleOpenResume = async (filename, candidateName = 'Candidate') => {
     if (!filename) return;
-    setDownloadingResume(filename);
 
-    let newTab = null;
-    try {
-      newTab = window.open('about:blank', '_blank');
-      if (newTab && newTab.document) {
-        newTab.document.write(`
-          <div style="font-family:system-ui,-apple-system,sans-serif;padding:40px 20px;text-align:center;color:#1B2B23;">
-            <div style="font-size:32px;margin-bottom:12px;">📄</div>
-            <div style="font-weight:700;font-size:18px;">Opening Candidate Resume...</div>
-            <div style="font-size:13px;color:#666;margin-top:8px;">Please wait while the resume is securely retrieved from the server.</div>
-          </div>
-        `);
-      }
-    } catch (e) {
-      newTab = null;
+    if (filename.includes('candidate_resume') || filename === 'default_resume.pdf') {
+      alert('This candidate did not upload a resume file during registration.');
+      return;
+    }
+
+    setOpeningResume(filename);
+
+    // Open a blank tab synchronously to prevent popup blockers
+    const newTab = window.open('about:blank', '_blank');
+    if (newTab) {
+      newTab.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${candidateName} - Resume</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #F8FAF9; color: #212529; }
+              .spinner { width: 36px; height: 36px; border: 3px solid #EAF7EF; border-top-color: #198754; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+              @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+          </head>
+          <body>
+            <div style="text-align: center;">
+              <div class="spinner"></div>
+              <h3 style="margin: 0 0 6px 0; font-size: 18px;">Opening ${candidateName}'s Resume...</h3>
+              <p style="margin: 0; font-size: 13px; color: #666;">Loading document, please wait a moment.</p>
+            </div>
+          </body>
+        </html>
+      `);
+      newTab.document.close();
     }
 
     try {
       const res = await adminAPI.downloadResume(filename);
-      const contentType = res.headers['content-type'] || 'application/pdf';
-      const blob = new Blob([res.data], { type: contentType });
-      const url = window.URL.createObjectURL(blob);
+      const ext = filename.toLowerCase().substring(filename.lastIndexOf('.'));
 
-      if (newTab) {
-        newTab.location.href = url;
-      }
+      let mimeType = 'application/pdf';
+      if (['.jpg', '.jpeg'].includes(ext)) mimeType = 'image/jpeg';
+      else if (ext === '.png') mimeType = 'image/png';
+      else if (ext === '.webp') mimeType = 'image/webp';
+      else if (['.doc', '.docx'].includes(ext)) mimeType = 'application/msword';
 
-      if (!newTab || !contentType.toLowerCase().includes('pdf')) {
-        const link = document.createElement('a');
-        link.href = url;
-        const cleanName = (candidateName || 'Candidate').replace(/[^a-zA-Z0-9_-]/g, '_');
-        const ext = filename.lastIndexOf('.') !== -1 ? filename.substring(filename.lastIndexOf('.')) : '.pdf';
-        link.setAttribute('download', `${cleanName}_Resume${ext}`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+      const blob = new Blob([res.data], { type: mimeType });
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      if (newTab && !newTab.closed) {
+        if (mimeType.includes('pdf')) {
+          newTab.document.open();
+          newTab.document.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <title>${candidateName} - Resume</title>
+                <style>
+                  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #525659; }
+                  iframe { width: 100%; height: 100%; border: none; }
+                </style>
+              </head>
+              <body>
+                <iframe src="${blobUrl}" type="application/pdf"></iframe>
+              </body>
+            </html>
+          `);
+          newTab.document.close();
+        } else if (mimeType.startsWith('image/')) {
+          newTab.document.open();
+          newTab.document.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <title>${candidateName} - Resume</title>
+                <style>
+                  body { margin: 0; padding: 20px; background: #1a1a1a; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                  img { max-width: 95%; max-height: 95vh; object-fit: contain; box-shadow: 0 4px 20px rgba(0,0,0,0.5); border-radius: 8px; }
+                </style>
+              </head>
+              <body>
+                <img src="${blobUrl}" alt="${candidateName} Resume" />
+              </body>
+            </html>
+          `);
+          newTab.document.close();
+        } else {
+          newTab.document.open();
+          newTab.document.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <title>${candidateName} - Resume</title>
+                <style>
+                  body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #F8FAF9; }
+                  .box { background: white; padding: 32px; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); text-align: center; max-width: 420px; }
+                  .btn { display: inline-block; margin-top: 16px; background: #198754; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+                </style>
+              </head>
+              <body>
+                <div class="box">
+                  <div style="font-size: 32px; margin-bottom: 12px;">📄</div>
+                  <h3 style="margin: 0 0 8px;">Word Document Resume</h3>
+                  <p style="color: #666; font-size: 13px; margin: 0;">This resume was uploaded as a Word document (${ext}). Click below if you wish to download it.</p>
+                  <a href="${blobUrl}" download="${candidateName}_Resume${ext}" class="btn">Download Word File</a>
+                </div>
+              </body>
+            </html>
+          `);
+          newTab.document.close();
+        }
+      } else {
+        window.open(blobUrl, '_blank');
       }
     } catch (err) {
-      console.error('Resume download failed:', err);
-      if (newTab) newTab.close();
-      alert('Resume file could not be opened from server.');
+      console.error('Resume open failed:', err);
+      if (newTab && !newTab.closed) {
+        newTab.document.open();
+        newTab.document.write(`
+          <div style="font-family:system-ui;padding:40px;text-align:center;color:#dc3545;">
+            <h3>Resume file could not be loaded</h3>
+            <p style="color:#666;font-size:14px;">The requested file may no longer be available on the server.</p>
+          </div>
+        `);
+        newTab.document.close();
+      }
     } finally {
-      setDownloadingResume(null);
+      setOpeningResume(null);
     }
   };
 
@@ -692,24 +774,24 @@ export default function AdminDashboard() {
                         {cand.durationUsed}
                       </td>
 
-                      {/* Resume Download */}
+                      {/* Resume View */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        {cand.resumeFilePath ? (
+                        {cand.resumeFilePath && !cand.resumeFilePath.includes('candidate_resume') && cand.resumeFilePath !== 'default_resume.pdf' ? (
                           <button
-                            onClick={() => handleDownloadResume(cand.resumeFilePath, cand.fullName)}
-                            disabled={downloadingResume === cand.resumeFilePath}
+                            onClick={() => handleOpenResume(cand.resumeFilePath, cand.fullName)}
+                            disabled={openingResume === cand.resumeFilePath}
                             className="inline-flex items-center gap-1.5 text-xs text-[#198754] dark:text-emerald-400 hover:underline font-semibold disabled:opacity-50 cursor-pointer"
-                            title="Click to view & download candidate resume"
+                            title="Click to view candidate resume in separate window"
                           >
-                            {downloadingResume === cand.resumeFilePath ? (
+                            {openingResume === cand.resumeFilePath ? (
                               <span className="w-3.5 h-3.5 border-2 border-[#198754] border-t-transparent rounded-full animate-spin" />
                             ) : (
                               <FileText className="w-3.5 h-3.5" />
                             )}
-                            <span>{downloadingResume === cand.resumeFilePath ? 'Opening...' : 'Download'}</span>
+                            <span>{openingResume === cand.resumeFilePath ? 'Opening...' : 'View Resume'}</span>
                           </button>
                         ) : (
-                          <span className="text-gray-400 text-xs">-</span>
+                          <span className="text-gray-400 text-xs italic">Not Uploaded</span>
                         )}
                       </td>
 
@@ -810,21 +892,21 @@ export default function AdminDashboard() {
                     </div>
                     <div>
                       <div className="text-gray-400">Resume</div>
-                      {candidateAudit?.candidate?.resumeFilePath ? (
+                      {candidateAudit?.candidate?.resumeFilePath && !candidateAudit.candidate.resumeFilePath.includes('candidate_resume') && candidateAudit.candidate.resumeFilePath !== 'default_resume.pdf' ? (
                         <button
-                          onClick={() => handleDownloadResume(candidateAudit.candidate.resumeFilePath, candidateAudit.candidate.full_name || candidateAudit.candidate.fullName)}
-                          disabled={downloadingResume === candidateAudit.candidate.resumeFilePath}
+                          onClick={() => handleOpenResume(candidateAudit.candidate.resumeFilePath, candidateAudit.candidate.full_name || candidateAudit.candidate.fullName)}
+                          disabled={openingResume === candidateAudit.candidate.resumeFilePath}
                           className="inline-flex items-center gap-1.5 text-xs text-[#198754] dark:text-emerald-400 hover:underline font-bold mt-0.5 cursor-pointer disabled:opacity-50"
                         >
-                          {downloadingResume === candidateAudit.candidate.resumeFilePath ? (
+                          {openingResume === candidateAudit.candidate.resumeFilePath ? (
                             <span className="w-3.5 h-3.5 border-2 border-[#198754] border-t-transparent rounded-full animate-spin" />
                           ) : (
                             <FileText className="w-3.5 h-3.5" />
                           )}
-                          <span>{downloadingResume === candidateAudit.candidate.resumeFilePath ? 'Opening...' : 'View / Download'}</span>
+                          <span>{openingResume === candidateAudit.candidate.resumeFilePath ? 'Opening...' : 'View Resume'}</span>
                         </button>
                       ) : (
-                        <div className="text-gray-400 text-xs italic">Not Provided</div>
+                        <div className="text-gray-400 text-xs italic">Not Uploaded</div>
                       )}
                     </div>
                   </div>
