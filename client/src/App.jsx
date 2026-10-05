@@ -6,7 +6,7 @@ import AssessmentRoom from './pages/AssessmentRoom';
 import AssessmentCompletion from './pages/AssessmentCompletion';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
-import TestPaused, { TEST_RESUME_TIME } from './pages/TestPaused';
+import TestPaused from './pages/TestPaused';
 
 // Protected Route Guard for Admin
 function ProtectedAdminRoute({ children }) {
@@ -17,12 +17,12 @@ function ProtectedAdminRoute({ children }) {
   return children;
 }
 
-// 1-Hour Pause Guard for Candidate Assessment Flow
+// Guard for Candidate Assessment Flow (Disabled)
 function CandidateAccessGuard({ children }) {
-  const [isPaused, setIsPaused] = React.useState(Date.now() < TEST_RESUME_TIME);
+  const isTestDisabled = true;
 
-  if (isPaused) {
-    return <TestPaused onResume={() => setIsPaused(false)} />;
+  if (isTestDisabled) {
+    return <TestPaused />;
   }
 
   return children;
