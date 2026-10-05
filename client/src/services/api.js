@@ -56,6 +56,7 @@ export const adminAPI = {
   getCandidates: (params) => api.get('/admin/candidates', { params }),
   getCandidateDetails: (id) => api.get(`/admin/candidate/${id}`),
   getResumeUrl: (filename) => `${API_BASE_URL}/admin/resume/${encodeURIComponent(filename)}`,
+  downloadResume: (filename) => api.get(`/admin/resume/${encodeURIComponent(filename)}`, { responseType: 'blob' }),
   exportCSV: () => api.get('/admin/export-csv', { responseType: 'blob' }),
   deleteCandidate: (id) => api.delete(`/admin/candidate/${id}`),
   deleteAllCandidates: () => api.delete('/admin/candidates/all'),

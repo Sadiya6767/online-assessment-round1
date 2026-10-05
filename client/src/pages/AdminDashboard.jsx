@@ -217,6 +217,57 @@ export default function AdminDashboard() {
     }
   };
 
+  const [downloadingResume, setDownloadingResume] = useState(null);
+
+  const handleDownloadResume = async (filename, candidateName = 'Candidate') => {
+    if (!filename) return;
+    setDownloadingResume(filename);
+
+    let newTab = null;
+    try {
+      newTab = window.open('about:blank', '_blank');
+      if (newTab && newTab.document) {
+        newTab.document.write(`
+          <div style="font-family:system-ui,-apple-system,sans-serif;padding:40px 20px;text-align:center;color:#1B2B23;">
+            <div style="font-size:32px;margin-bottom:12px;">📄</div>
+            <div style="font-weight:700;font-size:18px;">Opening Candidate Resume...</div>
+            <div style="font-size:13px;color:#666;margin-top:8px;">Please wait while the resume is securely retrieved from the server.</div>
+          </div>
+        `);
+      }
+    } catch (e) {
+      newTab = null;
+    }
+
+    try {
+      const res = await adminAPI.downloadResume(filename);
+      const contentType = res.headers['content-type'] || 'application/pdf';
+      const blob = new Blob([res.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+
+      if (newTab) {
+        newTab.location.href = url;
+      }
+
+      if (!newTab || !contentType.toLowerCase().includes('pdf')) {
+        const link = document.createElement('a');
+        link.href = url;
+        const cleanName = (candidateName || 'Candidate').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const ext = filename.lastIndexOf('.') !== -1 ? filename.substring(filename.lastIndexOf('.')) : '.pdf';
+        link.setAttribute('download', `${cleanName}_Resume${ext}`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+    } catch (err) {
+      console.error('Resume download failed:', err);
+      if (newTab) newTab.close();
+      alert('Resume file could not be opened from server.');
+    } finally {
+      setDownloadingResume(null);
+    }
+  };
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'COMPLETED':
@@ -644,15 +695,19 @@ export default function AdminDashboard() {
                       {/* Resume Download */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         {cand.resumeFilePath ? (
-                          <a
-                            href={adminAPI.getResumeUrl(cand.resumeFilePath)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-[#198754] dark:text-emerald-400 hover:underline font-semibold"
+                          <button
+                            onClick={() => handleDownloadResume(cand.resumeFilePath, cand.fullName)}
+                            disabled={downloadingResume === cand.resumeFilePath}
+                            className="inline-flex items-center gap-1.5 text-xs text-[#198754] dark:text-emerald-400 hover:underline font-semibold disabled:opacity-50 cursor-pointer"
+                            title="Click to view & download candidate resume"
                           >
-                            <FileText className="w-3.5 h-3.5" />
-                            <span>Download</span>
-                          </a>
+                            {downloadingResume === cand.resumeFilePath ? (
+                              <span className="w-3.5 h-3.5 border-2 border-[#198754] border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5" />
+                            )}
+                            <span>{downloadingResume === cand.resumeFilePath ? 'Opening...' : 'Download'}</span>
+                          </button>
                         ) : (
                           <span className="text-gray-400 text-xs">-</span>
                         )}
@@ -752,6 +807,25 @@ export default function AdminDashboard() {
                       <div className="font-bold text-[#146C43] dark:text-emerald-400 text-sm">
                         {candidateAudit?.candidate?.score} / {candidateAudit?.candidate?.totalQuestions} ({Math.round(((candidateAudit?.candidate?.score || 0) / (candidateAudit?.candidate?.totalQuestions || 50)) * 100)}%)
                       </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-400">Resume</div>
+                      {candidateAudit?.candidate?.resumeFilePath ? (
+                        <button
+                          onClick={() => handleDownloadResume(candidateAudit.candidate.resumeFilePath, candidateAudit.candidate.full_name || candidateAudit.candidate.fullName)}
+                          disabled={downloadingResume === candidateAudit.candidate.resumeFilePath}
+                          className="inline-flex items-center gap-1.5 text-xs text-[#198754] dark:text-emerald-400 hover:underline font-bold mt-0.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {downloadingResume === candidateAudit.candidate.resumeFilePath ? (
+                            <span className="w-3.5 h-3.5 border-2 border-[#198754] border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <FileText className="w-3.5 h-3.5" />
+                          )}
+                          <span>{downloadingResume === candidateAudit.candidate.resumeFilePath ? 'Opening...' : 'View / Download'}</span>
+                        </button>
+                      ) : (
+                        <div className="text-gray-400 text-xs italic">Not Provided</div>
+                      )}
                     </div>
                   </div>
 

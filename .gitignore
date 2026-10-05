@@ -21,6 +21,7 @@ yarn-error.log*
 server/uploads/*
 !server/uploads/.gitkeep
 !server/data/.gitkeep
+candidate_resumes_backup/
 
 # Environment variables
 .env
