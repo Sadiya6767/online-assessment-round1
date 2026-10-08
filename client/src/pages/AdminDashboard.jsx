@@ -73,13 +73,20 @@ export default function AdminDashboard() {
 
   const adminUser = JSON.parse(localStorage.getItem('nexis_admin_user') || '{}');
 
-  const fetchDashboardData = async () => {
+  const searchRef = React.useRef(search);
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
+
+  const fetchDashboardData = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) {
+        setLoading(true);
+      }
       const [statsRes, candRes] = await Promise.all([
         adminAPI.getStats(),
         adminAPI.getCandidates({
-          search: search.trim(),
+          search: (searchRef.current || '').trim(),
           status: statusFilter,
           profile: profileFilter,
           gradYear: gradYearFilter,
@@ -92,7 +99,9 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
-      setLoading(false);
+      if (!isBackground) {
+        setLoading(false);
+      }
     }
   };
 
@@ -102,12 +111,19 @@ export default function AdminDashboard() {
       navigate('/admin/login');
       return;
     }
-    fetchDashboardData();
+    fetchDashboardData(false);
+
+    // Auto-poll every 8 seconds so newly registered candidates appear live
+    const interval = setInterval(() => {
+      fetchDashboardData(true);
+    }, 8000);
+
+    return () => clearInterval(interval);
   }, [statusFilter, profileFilter, gradYearFilter, percentageRange]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchDashboardData();
+    fetchDashboardData(false);
   };
 
   const handleClearSearch = () => {
@@ -602,7 +618,7 @@ export default function AdminDashboard() {
 
               {/* Refresh Table */}
               <button
-                onClick={fetchDashboardData}
+                onClick={() => fetchDashboardData(false)}
                 title="Refresh Table"
                 className="p-2 text-gray-600 dark:text-gray-300 hover:text-[#198754] hover:bg-[#EAF7EF] dark:hover:bg-[#1B2B23] rounded-xl border border-gray-200 dark:border-[#284033] transition-colors"
               >
@@ -640,10 +656,17 @@ export default function AdminDashboard() {
         {/* Candidate Records Table */}
         <section className="bg-white dark:bg-[#14221B] rounded-2xl border border-gray-200/90 dark:border-[#284033] shadow-soft dark:shadow-dark-soft overflow-hidden">
           <div className="p-4 border-b border-gray-100 dark:border-gray-800/80 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <h2 className="text-sm font-bold uppercase tracking-wider text-gray-800 dark:text-gray-200">
                 Candidate Assessments ({candidates.length})
               </h2>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                Live Updates (Auto-sync)
+              </span>
               {percentageRange !== 'ALL' && (
                 <span className="text-xs bg-[#EAF7EF] dark:bg-[#1D3327] text-[#146C43] dark:text-emerald-300 font-semibold px-2.5 py-0.5 rounded-full border border-[#C8E8D5] dark:border-[#294337]">
                   Filter: {percentageRange}%
