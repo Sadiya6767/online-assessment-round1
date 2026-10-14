@@ -69,6 +69,8 @@ export default function AssessmentRoom() {
       setError(err.response?.data?.error || 'Failed to connect to assessment server. Reconnecting...');
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
+      isAutoAdvancingRef.current = false;
     }
   };
 
@@ -248,6 +250,20 @@ export default function AssessmentRoom() {
     };
   }, [question?.id, loading, isTerminated]);
 
+  // Safety Watchdog: If for any reason a question stays on screen longer than 15s (12s + 3s network buffer), auto-unfreeze and advance!
+  useEffect(() => {
+    if (!question || loading || isTerminated) return;
+
+    const watchdogTimer = setTimeout(() => {
+      console.warn('Watchdog triggered: Syncing question state after timeout.');
+      setIsSubmitting(false);
+      isAutoAdvancingRef.current = false;
+      fetchCurrentState();
+    }, 15000);
+
+    return () => clearTimeout(watchdogTimer);
+  }, [question?.id, loading, isTerminated]);
+
   // Automatically submit and advance when question 12s limit expires
   const triggerAutoAdvance = async () => {
     if (isSubmitting || isTerminated) return;
@@ -277,6 +293,9 @@ export default function AssessmentRoom() {
       } catch (err2) {
         await fetchCurrentState();
       }
+    } finally {
+      setIsSubmitting(false);
+      isAutoAdvancingRef.current = false;
     }
   };
 
@@ -315,6 +334,8 @@ export default function AssessmentRoom() {
       } catch (err2) {
         await fetchCurrentState();
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

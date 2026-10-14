@@ -46,8 +46,32 @@ export async function adminLogin(req, res) {
   }
 }
 
+export async function autoReconcileExpiredAssessments() {
+  try {
+    // Automatically finalize any assessments whose deadline has passed
+    // (e.g. candidate closed browser, abandoned test midway, or disconnected)
+    await db.run(`
+      UPDATE assessments
+      SET status = 'TIMED_OUT',
+          completion_reason = 'Time Limit Expired (Auto-Finalized)',
+          submission_time = COALESCE(submission_time, deadline, CURRENT_TIMESTAMP),
+          score = COALESCE((
+            SELECT COUNT(*) FROM answers 
+            WHERE answers.assessment_id = assessments.id AND answers.is_correct = 1
+          ), 0)
+      WHERE status = 'IN_PROGRESS' 
+        AND deadline IS NOT NULL 
+        AND deadline < CURRENT_TIMESTAMP
+    `);
+  } catch (err) {
+    console.warn('Auto-reconcile expired assessments notice:', err.message);
+  }
+}
+
 export async function getDashboardStats(req, res) {
   try {
+    await autoReconcileExpiredAssessments();
+
     const totalCandidatesRow = await db.get('SELECT COUNT(*) as count FROM candidates');
     const totalAttemptsRow = await db.get("SELECT COUNT(*) as count FROM assessments WHERE status != 'NOT_STARTED'");
     const completedRow = await db.get("SELECT COUNT(*) as count FROM assessments WHERE status = 'COMPLETED'");
@@ -94,6 +118,8 @@ export async function triggerRetentionPurge(req, res) {
 
 export async function getCandidates(req, res) {
   try {
+    await autoReconcileExpiredAssessments();
+
     const { search, status, gradYear, percentageRange, profile } = req.query;
 
     let query = `
@@ -190,6 +216,8 @@ export async function getCandidates(req, res) {
 
 export async function getCandidateDetails(req, res) {
   try {
+    await autoReconcileExpiredAssessments();
+
     const { id } = req.params;
 
     const candidate = await db.get(`
@@ -289,6 +317,8 @@ export function downloadResume(req, res) {
 
 export async function exportCSV(req, res) {
   try {
+    await autoReconcileExpiredAssessments();
+
     const rows = await db.all(`
       SELECT 
         c.id as "Candidate_ID",
